@@ -1,6 +1,6 @@
 # 贡献指南 · Contributing
 
-感谢关注 sudoku。仓库当前处于 **`0.0.0-stage` 空骨架** 阶段：三层结构 + CI/发布链路已就位，
+感谢关注 sudoku。仓库当前处于 **`0.0.0` 空骨架** 阶段：三层结构 + CI/发布链路已就位，
 游戏引擎待补。
 
 **快捷入口**
@@ -49,9 +49,10 @@ pnpm test         # core vitest
 
 三包版本 **lockstep**。npm 可信发布者无法发某个包的第一个版本，故：
 
-1. **首版手工 seed**：三包 `version = 0.0.0-stage`，`pnpm build && pnpm verify:dist` 后
-   用 npm 凭据 `npm publish --access public --tag stage`（**必须 `--tag stage`**，否则预发布版
-   会被设成 `latest`）。见根 README「首次占位发布」。
+1. **首版手工 seed**：三包 `version = 0.0.0`（**勿用 `0.0.0-stage`** —— 它是 npm Staged
+   Publishing 保留的哨兵版本，`npm publish` 用它会被 403 拒），`pnpm build && pnpm verify:dist`
+   后用 npm 凭据 `npm publish --access public --tag stage`（**必须 `--tag stage`** 作 dist-tag，
+   否则 `0.0.0` 会被设成 `latest`）。见根 README「首次占位发布」。
 2. 在 npmjs 为三包登记 Trusted Publisher → `my-gam/sudoku` + `publish.yml` + environment `npm`。
 3. 之后正式版本：bump 三包 `version` 到同一 semver → 跑四道门禁 → `chore(release): vX.Y.Z` 签名提交
    → 在该提交上 `git tag -s vX.Y.Z` → **由维护者明确指示后** push tag 触发 `publish.yml` 全自动发。

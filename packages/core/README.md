@@ -1,6 +1,6 @@
 # @my-games/sudoku-core
 
-> 数独引擎核心，纯 TypeScript、无框架依赖。**当前为 `0.0.0-stage` 占位版本**，
+> 数独引擎核心，纯 TypeScript、无框架依赖。**当前为 `0.0.0` 占位版本**，
 > 仅导出占位常量，用于种下 npm 首版并配置 Trusted Publisher。
 
 ```bash

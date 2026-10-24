@@ -1,5 +1,5 @@
 /*
- * @my-games/sudoku-core —— 0.0.0-stage 占位样式表（单数命名 ./style.css）。
+ * @my-games/sudoku-core —— 0.0.0 占位样式表（单数命名 ./style.css）。
  *
  * 空骨架阶段只放最小基类，保证三包各自构建能产出非空 dist/index.css
  * （verify:dist 守卫要求 vue/react 的 index.css 存在且非 0 字节）。

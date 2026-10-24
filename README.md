@@ -1,7 +1,7 @@
-# sudoku（0.0.0-stage 空骨架）
+# sudoku（0.0.0 空骨架）
 
 > 这是一个 **占位发布**：monorepo 三层结构 + CI/发布链路已就位，但游戏逻辑尚未落地。
-> 目的是先把 `@my-games/sudoku-core` / `-vue` / `-react` 三个包以 `0.0.0-stage`
+> 目的是先把 `@my-games/sudoku-core` / `-vue` / `-react` 三个包以 `0.0.0`
 > 手工种进 npm，用来配置 GitHub 的 npm **Trusted Publisher**（可信发布者无法发布
 > 某个包的第一个版本，所以首版必须手工 seed）。真实数独引擎会在此之后作为后续提交补入。
 
@@ -31,15 +31,24 @@ pnpm test         # core 冒烟测试
 
 ## 首次占位发布（维护者手工执行）
 
-`0.0.0-stage` 无法通过 Trusted Publishing 上传（可信发布者只能绑定已存在的包），必须用
-一次性 npm token 手工发。**务必带 `--tag stage`**，否则会把预发布版设成 `latest`、污染 dist-tag：
+占位版本用 `0.0.0`。**注意：不要用 `0.0.0-stage` 作版本号** —— 那是 npm Staged Publishing
+特性保留的哨兵版本（`npm stage publish` 会自动发一个 `0.0.0-stage` 占位），普通
+`npm publish` / `pnpm publish` 用它会被 registry 拒绝：`403 You cannot publish using the
+version: 0.0.0-stage`。想让占位版不占用 `latest`，靠的是 **dist-tag** `--tag stage`，
+与版本号无关。
+
+首版仍无法走 Trusted Publishing（可信发布者只能绑定已存在的包），必须用一次性 npm
+凭据手工发。**务必带 `--tag stage`**，否则 `0.0.0` 会被设成 `latest`：
 
 ```bash
 pnpm build && pnpm verify:dist
 npm login            # 或 NPM_TOKEN；仅首版需要
+# 逐包（npm workspaces 语法）：
 npm publish --access public --tag stage -w @my-games/sudoku-core
 npm publish --access public --tag stage -w @my-games/sudoku-vue
 npm publish --access public --tag stage -w @my-games/sudoku-react
+# 或一把梭（pnpm）：
+# pnpm -r --filter "./packages/**" publish --access public --tag stage --no-git-checks
 ```
 
 发完在 npmjs 上为 `@my-games` org 的三个包分别登记 Trusted Publisher：指向

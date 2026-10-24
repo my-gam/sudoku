@@ -1,6 +1,6 @@
 # @my-games/sudoku-vue
 
-> 数独的 Vue 3 组件适配器。**当前为 `0.0.0-stage` 占位版本**，`GameSudoku` 仅渲染占位文案。
+> 数独的 Vue 3 组件适配器。**当前为 `0.0.0` 占位版本**，`GameSudoku` 仅渲染占位文案。
 
 ```bash
 pnpm add @my-games/sudoku-vue vue

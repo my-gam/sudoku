@@ -9,6 +9,6 @@ import { SUDOKU_PACKAGE, SUDOKU_STAGE } from '../src/index';
 describe('sudoku-core 占位', () => {
   it('导出占位标识', () => {
     expect(SUDOKU_PACKAGE).toBe('sudoku-core');
-    expect(SUDOKU_STAGE).toBe('0.0.0-stage');
+    expect(SUDOKU_STAGE).toBe('0.0.0');
   });
 });
