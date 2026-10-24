@@ -1,0 +1,17 @@
+/*
+ * @my-games/sudoku-core —— 0.0.0-stage 占位样式表（单数命名 ./style.css）。
+ *
+ * 空骨架阶段只放最小基类，保证三包各自构建能产出非空 dist/index.css
+ * （verify:dist 守卫要求 vue/react 的 index.css 存在且非 0 字节）。
+ * 真实棋盘样式（3×3 宫格布局、题面/用户/冲突配色、铅笔笔记迷你格）随引擎补入。
+ */
+
+.game-sudoku {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #1f2d3d;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
