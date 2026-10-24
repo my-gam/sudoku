@@ -1,17 +1,73 @@
 /**
- * @my-games/sudoku-core —— `0.0.0` 占位实现。
+ * @my-games/sudoku-core
  *
- * 这是一个「空包」骨架：目的仅是把 monorepo 的
- * `build → verify:dist → typecheck → test` 门禁与 npm Trusted Publisher 链路跑通，
- * 好让首版（可信发布者无法发某包的第一个版本）能先手工种进 registry。
+ * 无框架依赖的数独引擎。入口分三类：
+ * - `Sudoku` 类：状态机 + 订阅 + 存档 + undo + 计时（注入 clock）。
+ * - `solve` / `countSolutions` / `generatePuzzle` / `generateFullGrid`：回溯求解与唯一解题生成。
+ * - 纯函数原语 `isSafe` / `candidates` / `findConflicts` / `isSolved` ... 与存储工具。
  *
- * 真实数独引擎 —— 棋盘校验、回溯求解器、唯一解题生成、`Sudoku` 状态机
- * （选格/填数/擦除/笔记/提示/撤销/计时）、注入式存档与最佳用时 —— 已在占位包
- * 发布前按同一三层结构写好并暂存，待 `0.0.0` 上线后作为后续提交补回。
+ * IIFE / UMD 全局名 `SudokuCore` 上挂的就是下面这些导出，与 ESM 侧完全一致。
  */
 
-/** 包标识占位。 */
-export const SUDOKU_PACKAGE = 'sudoku-core' as const;
+export { Sudoku } from './game';
+export type { GameOptions } from './game';
 
-/** 占位版本，与 package.json 的 version 对齐，便于确认发的是 stage 包。 */
-export const SUDOKU_STAGE = '0.0.0' as const;
+export { solve, countSolutions } from './solver';
+
+export { generatePuzzle, generateFullGrid, TARGET_CLUES } from './generator';
+export type { GeneratedPuzzle } from './generator';
+
+export {
+  BOX,
+  DIGITS,
+  SIZE,
+  candidates,
+  cellAt,
+  cloneGrid,
+  countFilled,
+  createEmptyGrid,
+  emptyCells,
+  findConflicts,
+  gridsEqual,
+  hasConflict,
+  isFull,
+  isSafe,
+  isSolved,
+  makeMask,
+  peers,
+  setCell,
+  withCell
+} from './board';
+
+export {
+  DEFAULT_BEST_KEY,
+  DEFAULT_SAVE_KEY,
+  SAVE_VERSION,
+  clearSave,
+  emptyBestTimes,
+  isSerializedSave,
+  loadBest,
+  loadSave,
+  tryGetGlobalStorage,
+  writeBest,
+  writeSave
+} from './storage';
+
+export type {
+  BestTimes,
+  Cell,
+  Clock,
+  ConflictMask,
+  Difficulty,
+  Digit,
+  GameState,
+  GameStatus,
+  GivenMask,
+  Grid,
+  NoteGrid,
+  Position,
+  RandomSource,
+  SaveStorage,
+  SerializedSave,
+  Snapshot
+} from './types';
