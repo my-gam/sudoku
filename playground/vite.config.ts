@@ -11,7 +11,7 @@ import { defineConfig } from 'vite';
  * 三个包的 `exports["."]` 都指向 `./dist/*`，而 `dist/` 被 gitignore。所以本 playground
  * 不是「workspace 源码直连」——无论 dev 还是 build，都必须**先 build 三包**才能解析到它们。
  * 根脚本 `pnpm dev` = `pnpm build && pnpm --filter playground dev` 已保证这点；
- * 只有确认 `packages/*/dist` 已存在时，才可直接 `pnpm dev:play` 跳过重复构建。
+ * 只有确认各包的 dist 目录已存在时，才可直接 `pnpm dev:play` 跳过重复构建。
  * 全新 clone 若只跑 `pnpm dev:play`，会 `Cannot find module '@my-games/sudoku-core'`。
  */
 export default defineConfig({
