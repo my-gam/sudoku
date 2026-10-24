@@ -1,6 +1,6 @@
 {
   "name": "@my-games/sudoku-vue",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Vue 3 SFC adapter for the @my-games/sudoku-core game engine — Composition API, mobile-ready, with a backtracking solver hint hook. 数独的 Vue 3 组件适配器。",
   "type": "module",
   "main": "./dist/index.js",
