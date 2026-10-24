@@ -1,4 +1,12 @@
-export { GameSudoku, type GameSudokuProps } from './GameSudoku';
+export { GameSudoku, type GameSudokuProps, type GameSudokuHandle } from './GameSudoku';
+export { useGame, type UseGameReturn } from './useGame';
 
-export const SUDOKU_PACKAGE = 'sudoku-react' as const;
-export const SUDOKU_STAGE = '0.0.0' as const;
+export type {
+  Cell,
+  Difficulty,
+  Digit,
+  GameState,
+  GameStatus,
+  Grid,
+  SaveStorage
+} from '@my-games/sudoku-core';
