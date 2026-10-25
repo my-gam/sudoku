@@ -149,6 +149,11 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
     };
 
     const unsub = game.subscribe(render);
+    // 用时每秒刷新：core 只在操作时推快照，这里补一个 1s tick；通关后不再重绘。
+    const timer = window.setInterval(() => {
+      const s = game.getState();
+      if (s.status === 'playing') render(s);
+    }, 1000);
 
     // ---- 交互 ----
     const onPad = (ev: MouseEvent): void => {
@@ -219,6 +224,7 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
     if (autofocus) board.focus({ preventScroll: true });
 
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener('keydown', onKey);
       pad.removeEventListener('click', onPad);
       board.removeEventListener('click', onBoardClick);

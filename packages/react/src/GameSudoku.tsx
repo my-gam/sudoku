@@ -116,7 +116,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     onSolved
   } = props;
 
-  const { state, select, input, erase, toggleNote, hint, newGame, undo } = useGame({
+  const { state, game, select, input, erase, toggleNote, hint, newGame, undo } = useGame({
     difficulty,
     storage,
     saveKey,
@@ -126,6 +126,13 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [noteMode, setNoteMode] = useState(false);
+  // 用时每秒刷新：core 只在操作时推快照，tick 触发重绘后由 game.getState() 读实时值。
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (state.status !== 'playing') return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [state.status]);
 
   const applyDigit = useCallback(
     (digit: Digit) => {
@@ -201,7 +208,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
   );
 
   const won = state.status === 'won';
-  const timeText = formatTime(state.elapsedSeconds);
+  const timeText = formatTime(won ? state.elapsedSeconds : game.getState().elapsedSeconds);
   const bestText = state.bestSeconds === null ? '—' : formatTime(state.bestSeconds);
 
   const renderCell = (row: number, col: number): ReactNode => {

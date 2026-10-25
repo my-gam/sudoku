@@ -40,7 +40,7 @@ const emit = defineEmits<{
   (e: 'solved', payload: { difficulty: Difficulty; seconds: number }): void;
 }>();
 
-const { state, select, input, erase, toggleNote, hint, newGame, undo } = useGame({
+const { state, raw, select, input, erase, toggleNote, hint, newGame, undo } = useGame({
   difficulty: props.difficulty,
   storage: props.storage,
   saveKey: props.saveKey,
@@ -50,6 +50,21 @@ const { state, select, input, erase, toggleNote, hint, newGame, undo } = useGame
 
 const boardEl = ref<HTMLDivElement | null>(null);
 const noteMode = ref(false);
+// 用时每秒刷新：core 只在操作时推快照，这里用 tick 触发对 raw.getState() 的实时重读。
+const tick = ref(0);
+let timerId: number | undefined;
+function startTimer(): void {
+  if (timerId !== undefined || typeof window === 'undefined') return;
+  timerId = window.setInterval(() => {
+    if (state.value.status === 'playing') tick.value++;
+  }, 1000);
+}
+function stopTimer(): void {
+  if (timerId !== undefined) {
+    window.clearInterval(timerId);
+    timerId = undefined;
+  }
+}
 
 const DIFFS: Array<{ key: Difficulty; label: string }> = [
   { key: 'easy', label: '简单' },
@@ -123,7 +138,10 @@ function formatTime(totalSeconds: number): string {
 }
 
 const overlayVisible = computed(() => state.value.status === 'won');
-const timeText = computed(() => formatTime(state.value.elapsedSeconds));
+const timeText = computed(() => {
+  void tick.value; // 依赖 tick，每秒重读实时用时
+  return formatTime(raw.getState().elapsedSeconds);
+});
 const bestText = computed(() =>
   state.value.bestSeconds === null ? '—' : formatTime(state.value.bestSeconds)
 );
@@ -172,8 +190,13 @@ let lastStatus = state.value.status;
 watch(
   () => state.value.status,
   (st) => {
-    if (st === 'won' && lastStatus !== 'won') {
-      emit('solved', { difficulty: state.value.difficulty, seconds: state.value.elapsedSeconds });
+    if (st === 'won') {
+      stopTimer();
+      if (lastStatus !== 'won') {
+        emit('solved', { difficulty: state.value.difficulty, seconds: raw.getState().elapsedSeconds });
+      }
+    } else {
+      startTimer(); // playing（含 newGame 重开）
     }
     lastStatus = st;
   }
@@ -182,9 +205,11 @@ watch(
 onMounted(() => {
   if (props.autofocus) boardEl.value?.focus({ preventScroll: true });
   window.addEventListener('keydown', onKey, { passive: false });
+  startTimer();
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey);
+  stopTimer();
 });
 
 defineExpose({ select, input, erase, toggleNote, hint, newGame, undo });
