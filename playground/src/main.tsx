@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-// 占位阶段只需一份组件样式；真实 playground 会挂 Vue/React/Vanilla 三 tab。
+// 棋盘视觉（core 同源，随组件包抽出）+ playground 外壳样式。
 import '@my-games/sudoku-react/style.css';
+import './playground.css';
 import { App } from './App';
 
 const el = document.getElementById('app');

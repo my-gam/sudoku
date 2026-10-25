@@ -1,95 +1,118 @@
-/* Playground 外壳样式（pg-*）；棋盘/格子视觉来自 @my-games/sudoku-core/style.css，
-   由 main.tsx 引一次 vue 包的 style.css（内容与 react/core 同源）。 */
+/* Playground 外壳样式（pg-*），移动优先紧凑排版。
+   棋盘/格子视觉来自 @my-games/sudoku-core/style.css（main.tsx 引一次组件 css）。
+   这里只在 .pg-stage 作用域内给 --board-size 一个上限，让桌面端也居中、不铺太宽。 */
 
 .pg-shell {
-  max-width: 560px;
+  --pg-line: #e2e8f0;
+  --pg-muted: #5a6b7f;
+  --pg-accent: #1c63b5;
+  max-width: 460px;
   margin: 0 auto;
-  padding: 24px 16px 48px;
+  padding: calc(14px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom));
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   color: #1f2d3d;
+  -webkit-text-size-adjust: 100%;
 }
 
-.pg-header h1 {
-  margin: 0 0 8px;
-  font-size: clamp(24px, 6vw, 34px);
+.pg-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.pg-header p {
-  margin: 0 0 12px;
-  line-height: 1.6;
-  color: #47566a;
-  font-size: 14px;
+.pg-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
 }
 
-.pg-header code {
-  background: #eef3f8;
-  padding: 1px 5px;
-  border-radius: 4px;
+.pg-sub {
+  margin-left: 8px;
   font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-muted);
 }
 
 .pg-badges {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  flex-shrink: 0;
 }
 
 .pg-badge {
-  font-size: 12px;
-  padding: 3px 10px;
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: #e7edf3;
-  color: #47566a;
+  background: #eef3f8;
+  color: var(--pg-muted);
+  white-space: nowrap;
 }
 
 .pg-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin: 20px 0 14px;
+  margin-bottom: 12px;
 }
 
 .pg-tab {
-  flex: 1;
-  padding: 10px 8px;
+  padding: 9px 4px;
   border: 1px solid #cbd6e2;
   border-radius: 10px;
   background: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: #47566a;
+  color: var(--pg-muted);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pg-tab.is-active {
-  background: #1c63b5;
-  border-color: #1c63b5;
+  background: var(--pg-accent);
+  border-color: var(--pg-accent);
   color: #fff;
 }
 
-.pg-panel {
-  margin-bottom: 22px;
+.pg-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
-.pg-panel-head {
+/* 组件在页内居中并给一个上限宽度（仅 playground 作用域，不改 core）。 */
+.pg-stage .game-sudoku {
+  --board-size: min(92vw, 420px);
+  width: 100%;
+  align-items: center;
+}
+
+.pg-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--pg-muted);
 }
 
-.pg-panel-head h2 {
-  margin: 0;
-  font-size: 18px;
+.pg-meta code {
+  background: #eef3f8;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .pg-tag {
   font-size: 11px;
+  font-weight: 700;
   padding: 2px 8px;
-  border-radius: 6px;
-  background: #eef3f8;
-  color: #47566a;
+  border-radius: 999px;
 }
 
 .pg-tag-vanilla {
@@ -104,46 +127,65 @@
 
 .pg-tag-react {
   background: #eaf2fb;
-  color: #1c63b5;
+  color: var(--pg-accent);
 }
 
-.pg-panel-desc {
-  margin: 0 0 14px;
+.pg-fold {
+  border-top: 1px solid var(--pg-line);
+}
+
+.pg-fold > summary {
+  padding: 10px 2px;
   font-size: 13px;
-  line-height: 1.6;
-  color: #5a6b7f;
+  font-weight: 600;
+  color: #3c4b5f;
+  cursor: pointer;
+  list-style: none;
 }
 
-.pg-panel-desc code {
-  background: #eef3f8;
-  padding: 1px 5px;
-  border-radius: 4px;
+.pg-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pg-fold > summary::before {
+  content: '▸ ';
+  color: var(--pg-muted);
+}
+
+.pg-fold[open] > summary::before {
+  content: '▾ ';
+}
+
+.pg-logbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.pg-btn {
+  padding: 4px 10px;
+  border: 1px solid #cbd6e2;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
   font-size: 12px;
-}
-
-.pg-hint,
-.pg-ai-panel {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #fff6e6;
-  color: #7a5a1e;
-  font-size: 13px;
-  line-height: 1.6;
+  color: var(--pg-muted);
+  cursor: pointer;
 }
 
 .pg-log {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 180px;
+  max-height: 150px;
   overflow-y: auto;
   padding: 10px 12px;
   border-radius: 8px;
   background: #0f1b2a;
   color: #cfe0f2;
   font-family: 'Consolas', 'Menlo', monospace;
-  font-size: 12px;
+  font-size: 11px;
+  margin-bottom: 4px;
 }
 
 .pg-log .row {
@@ -154,27 +196,38 @@
   color: #6f8296;
 }
 
-.pg-btn {
-  padding: 5px 10px;
-  border: 1px solid #cbd6e2;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
+.pg-about {
+  margin: 0 0 6px;
   font-size: 12px;
-  cursor: pointer;
+  line-height: 1.7;
+  color: var(--pg-muted);
 }
 
-.pg-footer {
-  margin-top: 28px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #6b7c93;
-}
-
-.pg-footer code {
+.pg-about code {
   background: #eef3f8;
-  padding: 1px 5px;
+  padding: 0 4px;
   border-radius: 4px;
+  font-size: 11px;
+}
+
+.pg-foot {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: #90a0b4;
+}
+
+.pg-foot a {
+  color: var(--pg-accent);
+  text-decoration: none;
+}
+
+@media (max-width: 360px) {
+  .pg-badges {
+    display: none;
+  }
+  .pg-shell {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
