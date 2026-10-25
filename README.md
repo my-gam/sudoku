@@ -45,7 +45,7 @@ node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 ## 在线 demo
 
 **<https://my-gam.github.io/sudoku/>** — 由 `pages.yml` 从 `main` 自动构建 deploy。
-可加 `?demo=vanilla|vue|react` 直接进某个 tab。
+可加 `?demo=vanilla|vue|react` 直接进某个 tab、`?hint=1` 显示「提示」按钮（默认 `hint()` 只作 API）。
 
 ## 玩法
 
@@ -130,6 +130,7 @@ console.log(countSolutions(puzzle) === 1, solve(puzzle)); // true, 与 solution 
 | `freshStart` | `boolean` | `false` | 忽略已有存档开新局 |
 | `autofocus` | `boolean` | `true` | mount 后 focus 棋盘 |
 | `showPad` | `boolean` | `true` | 是否显示数字键盘 |
+| `showHint` | `boolean` | `false` | 是否显示「提示」按钮；`hint()` 始终在 ref / `useGame` API 上 |
 | `title` | `string` | `'数独'` | 头部标题 |
 
 事件：`input/digit(digit, changed)`、`solved({ difficulty, seconds })`；React 另有 `className`。

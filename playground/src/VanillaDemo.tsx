@@ -13,6 +13,7 @@ export interface VanillaDemoProps {
   bestKey: string;
   difficulty?: Difficulty;
   autofocus?: boolean;
+  showHint?: boolean;
 }
 
 const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -28,7 +29,7 @@ function formatTime(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus = true }: VanillaDemoProps) {
+export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus = true, showHint = false }: VanillaDemoProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
       <div class="game-sudoku-actions">
         <button class="game-sudoku-button" type="button" data-role="note">笔记 关</button>
         <button class="game-sudoku-button" type="button" data-role="undo" disabled>撤销</button>
-        <button class="game-sudoku-button" type="button" data-role="hint">提示</button>
+        ${showHint ? '<button class="game-sudoku-button" type="button" data-role="hint">提示</button>' : ''}
         <button class="game-sudoku-button is-primary" type="button" data-role="new">新游戏</button>
       </div>`;
     host.appendChild(toolbar);
@@ -230,7 +231,7 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
       board.removeEventListener('click', onBoardClick);
       unsub();
     };
-  }, [saveKey, bestKey, difficulty, autofocus]);
+  }, [saveKey, bestKey, difficulty, autofocus, showHint]);
 
   return <div ref={hostRef} className="game-sudoku vanilla-host" />;
 }

@@ -22,6 +22,7 @@ interface Props {
   autofocus?: boolean;
   title?: string;
   showPad?: boolean;
+  showHint?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -32,7 +33,8 @@ const props = withDefaults(defineProps<Props>(), {
   freshStart: false,
   autofocus: true,
   title: '数独',
-  showPad: true
+  showPad: true,
+  showHint: false
 });
 
 const emit = defineEmits<{
@@ -270,6 +272,7 @@ defineExpose({ select, input, erase, toggleNote, hint, newGame, undo });
           撤销
         </button>
         <button
+          v-if="showHint"
           class="game-sudoku-button"
           type="button"
           :disabled="state.status === 'won'"

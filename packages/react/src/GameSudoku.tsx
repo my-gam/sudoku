@@ -29,6 +29,7 @@ export interface GameSudokuProps {
   showPad?: boolean;
   title?: string;
   className?: string;
+  showHint?: boolean;
   onDigit?: (digit: Digit, changed: boolean) => void;
   onSolved?: (payload: { difficulty: Difficulty; seconds: number }) => void;
 }
@@ -112,6 +113,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     showPad = true,
     title = '数独',
     className,
+    showHint = false,
     onDigit,
     onSolved
   } = props;
@@ -288,9 +290,16 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
           >
             撤销
           </button>
-          <button className="game-sudoku-button" type="button" disabled={won} onClick={() => hint()}>
-            提示
-          </button>
+          {showHint ? (
+            <button
+              className="game-sudoku-button"
+              type="button"
+              disabled={won}
+              onClick={() => hint()}
+            >
+              提示
+            </button>
+          ) : null}
           <button className="game-sudoku-button is-primary" type="button" onClick={() => newGame()}>
             新游戏
           </button>

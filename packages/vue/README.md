@@ -35,6 +35,7 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 | `freshStart` | `boolean` | `false` | 忽略已有存档开新局 |
 | `autofocus` | `boolean` | `true` | mount 后 focus 棋盘让键盘立即可用 |
 | `showPad` | `boolean` | `true` | 是否显示数字键盘 |
+| `showHint` | `boolean` | `false` | 是否显示「提示」按钮（`hint()` 始终在 ref / `useGame` 上） |
 | `title` | `string` | `'数独'` | 头部标题 |
 
 ## 事件

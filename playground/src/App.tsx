@@ -26,6 +26,10 @@ function initialDemo(): Demo {
 
 export function App() {
   const [demo, setDemo] = useState<Demo>(initialDemo);
+  // 提示默认不常驻，靠 API；URL 加 ?hint=1 才在工具栏显示「提示」按钮（对齐 2048 的 ?ai=1 惯例）。
+  const [hintOn] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('hint') === '1'
+  );
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logIdRef = useRef(0);
 
@@ -86,7 +90,7 @@ export function App() {
               <span className="pg-tag pg-tag-vanilla">core</span>
               直接 <code>new Sudoku()</code> + 手搓 DOM，等价浏览器 IIFE 用法。
             </p>
-            <VanillaDemo saveKey="sudoku-vanilla:save" bestKey="sudoku-vanilla:best" autofocus />
+            <VanillaDemo saveKey="sudoku-vanilla:save" bestKey="sudoku-vanilla:best" autofocus showHint={hintOn} />
           </>
         )}
         {demo === 'vue' && (
@@ -95,7 +99,7 @@ export function App() {
               <span className="pg-tag pg-tag-vue">Vue 3</span>
               <code>GameSudoku.vue</code> + <code>useGame()</code> composable。
             </p>
-            <VuePanel saveKey="sudoku-vue:save" bestKey="sudoku-vue:best" autofocus />
+            <VuePanel saveKey="sudoku-vue:save" bestKey="sudoku-vue:best" autofocus showHint={hintOn} />
           </>
         )}
         {demo === 'react' && (
@@ -108,6 +112,7 @@ export function App() {
               saveKey="sudoku-react:save"
               bestKey="sudoku-react:best"
               autofocus
+              showHint={hintOn}
               onDigit={onReactDigit}
               onSolved={onReactSolved}
             />
@@ -143,7 +148,8 @@ export function App() {
           一个数独引擎，三种消费方式共享同一份 <code>@my-games/sudoku-core</code> 与样式：Vanilla
           直接吃 core、<code>@my-games/sudoku-vue</code>、<code>@my-games/sudoku-react</code>。
           三 tab 各自独立 localStorage 键（<code>sudoku-&lt;tab&gt;:save</code> / <code>:best</code>），
-          切换不打断对局。键盘：1-9 填数、N 笔记、Backspace 擦除、方向键移动选中。
+          切换不打断对局。键盘：1-9 填数、N 笔记、Backspace 擦除、方向键移动选中。「提示」默认不常驻，
+          只作为 API（<code>useGame().hint()</code> / 组件 ref）；URL 加 <code>?hint=1</code> 才显示按钮。
         </p>
       </details>
 

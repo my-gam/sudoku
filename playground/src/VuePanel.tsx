@@ -13,13 +13,14 @@ export interface VuePanelProps {
   bestKey?: string;
   difficulty?: Difficulty;
   autofocus?: boolean;
+  showHint?: boolean;
 }
 
 export function VuePanel(props: VuePanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cbRef = useRef(props);
   cbRef.current = props;
-  const { saveKey, bestKey, difficulty, autofocus } = props;
+  const { saveKey, bestKey, difficulty, autofocus, showHint } = props;
 
   useEffect(() => {
     const el = hostRef.current;
@@ -31,13 +32,15 @@ export function VuePanel(props: VuePanelProps) {
             saveKey,
             bestKey,
             difficulty,
-            autofocus: autofocus ?? true
+            autofocus: autofocus ?? true,
+            showHint: showHint ?? false
           });
       }
     });
     app.mount(el);
     return () => app.unmount();
-  }, [saveKey, bestKey, difficulty, autofocus]);
+  }, [saveKey, bestKey, difficulty, autofocus, showHint]);
 
   return <div ref={hostRef} />;
 }
+

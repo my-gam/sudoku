@@ -28,8 +28,8 @@ export function Demo() {
 ## Props
 
 同 Vue 版：`difficulty` / `storage` / `saveKey` / `bestKey` / `freshStart` / `autofocus` / `showPad` /
-`title`，另有 `className`（追加到最外层 `.game-sudoku`）、`onDigit(digit, changed)`、
-`onSolved({ difficulty, seconds })`。
+`showHint`（默认 `false`，`hint()` 始终在句柄 / `useGame` 上）/ `title`，另有 `className`（追加到最外层
+`.game-sudoku`）、`onDigit(digit, changed)`、`onSolved({ difficulty, seconds })`。
 
 ## Ref 命令式方法（`GameSudokuHandle`）
 
