@@ -30,7 +30,7 @@ export interface GameSudokuProps {
   title?: string;
   className?: string;
   showHint?: boolean;
-  onDigit?: (digit: Digit, changed: boolean) => void;
+  onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (payload: { difficulty: Difficulty; seconds: number }) => void;
 }
 
@@ -138,10 +138,11 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
 
   const applyDigit = useCallback(
     (digit: Digit) => {
+      const sel = game.getState().selected;
       const changed = noteMode ? toggleNote(digit) : input(digit);
-      if (!noteMode) onDigit?.(digit, changed);
+      if (!noteMode) onDigit?.({ digit, changed, row: sel?.row ?? -1, col: sel?.col ?? -1 });
     },
-    [noteMode, toggleNote, input, onDigit]
+    [noteMode, toggleNote, input, onDigit, game]
   );
 
   const handleKey = useCallback(

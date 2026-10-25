@@ -38,7 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  (e: 'input', digit: Digit, changed: boolean): void;
+  (e: 'input', payload: { digit: Digit; changed: boolean; row: number; col: number }): void;
   (e: 'solved', payload: { difficulty: Difficulty; seconds: number }): void;
 }>();
 
@@ -125,8 +125,9 @@ function cellClass(row: number, col: number): Record<string, boolean> {
 }
 
 function applyDigit(d: Digit): void {
+  const sel = state.value.selected;
   const changed = noteMode.value ? toggleNote(d) : input(d);
-  if (!noteMode.value) emit('input', d, changed);
+  if (!noteMode.value) emit('input', { digit: d, changed, row: sel?.row ?? -1, col: sel?.col ?? -1 });
 }
 
 function onPad(d: Digit): void {

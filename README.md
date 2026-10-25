@@ -133,7 +133,7 @@ console.log(countSolutions(puzzle) === 1, solve(puzzle)); // true, 与 solution 
 | `showHint` | `boolean` | `false` | 是否显示「提示」按钮；`hint()` 始终在 ref / `useGame` API 上 |
 | `title` | `string` | `'数独'` | 头部标题 |
 
-事件：`input/digit(digit, changed)`、`solved({ difficulty, seconds })`；React 另有 `className`。
+事件：`input`/`onDigit({ digit, changed, row, col })`（`row`/`col` 为目标格，0 起算）、`solved({ difficulty, seconds })`；React 另有 `className`。
 `ref`（`GameSudokuInstance` / `GameSudokuHandle`）暴露 `select / input / erase / toggleNote / hint / newGame / undo`。
 
 ### 引擎核心 API（`@my-games/sudoku-core`）

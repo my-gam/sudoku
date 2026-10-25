@@ -196,6 +196,18 @@
   color: #6f8296;
 }
 
+.pg-log .row.win {
+  color: #8ff0b6;
+  font-weight: 600;
+}
+
+/* 每个 tab 自己的事件日志：紧贴棋盘下方 */
+.pg-tablog {
+  width: 100%;
+  max-width: 460px;
+  margin-top: 4px;
+}
+
 .pg-about {
   margin: 0 0 6px;
   font-size: 12px;

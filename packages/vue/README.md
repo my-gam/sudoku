@@ -40,7 +40,7 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 
 ## 事件
 
-- `input(digit, changed)` — 填数后触发。
+- `input({ digit, changed, row, col })` — 填数后触发；`row`/`col` 为目标格（0 起算，未选中为 `-1`），`changed` 表示盘面是否真的变了。
 - `solved({ difficulty, seconds })` — 通关瞬间触发一次。
 
 ## Ref 命令式方法（`GameSudokuInstance`）

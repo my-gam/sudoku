@@ -14,6 +14,8 @@ export interface VanillaDemoProps {
   difficulty?: Difficulty;
   autofocus?: boolean;
   showHint?: boolean;
+  onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
+  onSolved?: (e: { difficulty: Difficulty; seconds: number }) => void;
 }
 
 const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -29,8 +31,19 @@ function formatTime(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus = true, showHint = false }: VanillaDemoProps) {
+export function VanillaDemo({
+  saveKey,
+  bestKey,
+  difficulty = 'easy',
+  autofocus = true,
+  showHint = false,
+  onDigit,
+  onSolved
+}: VanillaDemoProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // 用 ref 持有最新回调：DOM 构建的 effect 依赖只放引擎参数，不因父级回调换引用而重建棋盘。
+  const cb = useRef({ onDigit, onSolved });
+  cb.current = { onDigit, onSolved };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -149,7 +162,14 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
       });
     };
 
-    const unsub = game.subscribe(render);
+    let lastStatus = game.getState().status;
+    const unsub = game.subscribe((s) => {
+      render(s);
+      if (s.status === 'won' && lastStatus !== 'won') {
+        cb.current.onSolved?.({ difficulty: s.difficulty, seconds: s.elapsedSeconds });
+      }
+      lastStatus = s.status;
+    });
     // 用时每秒刷新：core 只在操作时推快照，这里补一个 1s tick；通关后不再重绘。
     const timer = window.setInterval(() => {
       const s = game.getState();
@@ -157,13 +177,17 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
     }, 1000);
 
     // ---- 交互 ----
+    // 统一填数/记笔记入口：非笔记模式即填充，回调带上目标格坐标（供事件日志显示"哪个框填几"）。
+    const applyFill = (d: Digit): void => {
+      const sel = game.getState().selected;
+      const changed = noteMode ? game.toggleNote(d) : game.input(d);
+      if (!noteMode) cb.current.onDigit?.({ digit: d, changed, row: sel?.row ?? -1, col: sel?.col ?? -1 });
+    };
     const onPad = (ev: MouseEvent): void => {
       const target = ev.target as HTMLElement;
       const digit = target.dataset?.digit;
       if (!digit) return;
-      const d = Number(digit) as Digit;
-      if (noteMode) game.toggleNote(d);
-      else game.input(d);
+      applyFill(Number(digit) as Digit);
     };
     pad.addEventListener('click', onPad);
 
@@ -179,9 +203,7 @@ export function VanillaDemo({ saveKey, bestKey, difficulty = 'easy', autofocus =
     const onKey = (ev: KeyboardEvent): void => {
       if (document.activeElement !== board) return;
       if (/^[1-9]$/.test(ev.key)) {
-        const d = Number(ev.key) as Digit;
-        if (noteMode) game.toggleNote(d);
-        else game.input(d);
+        applyFill(Number(ev.key) as Digit);
         ev.preventDefault();
         return;
       }
