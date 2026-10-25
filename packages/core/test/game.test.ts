@@ -220,20 +220,52 @@ describe('Sudoku 通关与计时', () => {
     expect(g.input(1)).toBe(false);
   });
 
-  it('clock 推进则 elapsedSeconds 增长，won 后冻结', () => {
+  it('计时从首次填充起算（仅选中/记笔记不走表）', () => {
     let now = 0;
     const clock: Clock = () => now;
     const g = newGame({ clock });
     now = 5000;
+    g.select(0, 3); // 仅选中
+    g.toggleNote(1); // 仅笔记
+    expect(g.getState().elapsedSeconds).toBe(0); // 未填充 → 恒 0
+    now = 9000;
     g.select(0, 2);
-    g.input(4);
-    expect(g.getState().elapsedSeconds).toBe(5);
-    now = 8000;
-    solveIt(g); // 通关发生在 now=8000
+    g.input(4); // 首次填充 → 此刻起表 = 0
+    expect(g.getState().elapsedSeconds).toBe(0);
+    now = 11000;
+    expect(g.getState().elapsedSeconds).toBe(2); // 从 9000 起算
+  });
+
+  it('won 后用时冻结（从首次填充计到通关）', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const g = newGame({ clock });
+    now = 4000;
+    g.select(0, 2);
+    g.input(4); // 起表 origin=4000
+    now = 9000;
+    solveIt(g); // 通关发生在 now=9000 → 5s
     expect(g.getState().status).toBe('won');
-    expect(g.getState().elapsedSeconds).toBe(8);
+    expect(g.getState().elapsedSeconds).toBe(5);
     now = 99999;
-    expect(g.getState().elapsedSeconds).toBe(8); // 冻结
+    expect(g.getState().elapsedSeconds).toBe(5); // 冻结
+  });
+
+  it('undo 回到首次填充之前 → 停表回 0:00', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const g = newGame({ clock });
+    now = 6000;
+    g.select(0, 2);
+    g.input(4); // 起表
+    now = 8000;
+    expect(g.getState().elapsedSeconds).toBe(2);
+    g.undo(); // 回到填充前（started 复位）
+    const s = g.getState();
+    expect(s.elapsedSeconds).toBe(0);
+    expect(s.grid[0]?.[2]).toBe(0);
+    now = 20000;
+    expect(g.getState().elapsedSeconds).toBe(0); // 已停表，仍 0
   });
 });
 

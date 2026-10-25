@@ -93,7 +93,8 @@ export class Sudoku {
   private moveCount = 0;
   private history: Snapshot[] = [];
 
-  // 计时三段量
+  // 计时三段量：started=false 时 elapsedMs 恒 0，首次填充（input/hint）才起算。
+  private started = false;
   private baseMs = 0;
   private origin = 0;
   private finalMs = 0;
@@ -198,6 +199,7 @@ export class Sudoku {
     if (cellAt(this.grid, sel.row, sel.col) === digit) return false; // 同值，无变化
 
     this.pushHistory();
+    this.ensureStarted(); // 首次填充起表
     setCell(this.grid, sel.row, sel.col, digit);
     const notesRow = this.notes[sel.row];
     if (notesRow) notesRow[sel.col] = []; // 有值即清空该格笔记
@@ -262,6 +264,7 @@ export class Sudoku {
     if (answer === 0) return false;
 
     this.pushHistory();
+    this.ensureStarted(); // 提示也算开始作答，起表
     setCell(this.grid, target.row, target.col, answer);
     const notesRow = this.notes[target.row];
     if (notesRow) notesRow[target.col] = [];
@@ -334,14 +337,24 @@ export class Sudoku {
     this.mistakeCount = 0;
     this.moveCount = 0;
     this.history = [];
+    this.started = false;
     this.baseMs = 0;
     this.finalMs = 0;
     this.origin = this.clock();
     this.clearSaved();
   }
 
+  /** 首次填充（input/hint）时懒起表；未起表前 elapsedMs 恒 0。 */
+  private ensureStarted(): void {
+    if (this.started) return;
+    this.started = true;
+    this.baseMs = 0;
+    this.origin = this.clock();
+  }
+
   private elapsedMs(): number {
     if (this.status === 'won') return this.finalMs;
+    if (!this.started) return 0;
     return this.baseMs + (this.clock() - this.origin);
   }
 
@@ -383,7 +396,8 @@ export class Sudoku {
       hintCount: this.hintCount,
       mistakeCount: this.mistakeCount,
       moveCount: this.moveCount,
-      elapsedMs: this.elapsedMs()
+      elapsedMs: this.elapsedMs(),
+      started: this.started
     };
     this.history.push(snap);
     if (this.history.length > this.undoLimit) this.history.shift();
@@ -397,6 +411,7 @@ export class Sudoku {
     this.hintCount = s.hintCount;
     this.mistakeCount = s.mistakeCount;
     this.moveCount = s.moveCount;
+    this.started = s.started;
     if (s.status === 'won') {
       this.finalMs = s.elapsedMs;
     } else {
@@ -419,6 +434,8 @@ export class Sudoku {
     this.history = [];
     this.selected = firstEmpty(this.grid);
     const elapsed = numberOr(save.elapsedMs, 0);
+    // 续档时按局面推定是否已起表：通关或已有操作/用时 → 已起表；否则等到首次填充才走。
+    this.started = this.status === 'won' || this.moveCount > 0 || elapsed > 0;
     if (this.status === 'won') {
       this.finalMs = elapsed;
       this.baseMs = elapsed;

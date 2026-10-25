@@ -76,6 +76,8 @@ export interface Snapshot {
   moveCount: number;
   /** 该快照生成时刻已累计的用时（ms），用于 undo 后计时口径一致。 */
   elapsedMs: number;
+  /** 计表是否已起算（首次填充后置 true）；undo 回未起算态则归位 false。 */
+  started: boolean;
 }
 
 /** 序列化存档；版本化字段演进策略见 storage.ts。 */
