@@ -16,9 +16,9 @@
 
 - **技术栈**：TypeScript 7（Go-native tsgo）· Vite 8（Rolldown）· Vue 3.5 · React 19（peerDep 兼容 18.2+）· Vitest 5
 - **包结构**：`packages/core` + `packages/vue` + `packages/react`，pnpm workspace；`playground/` 是三 tab 演示页（Vanilla / Vue / React）。
-- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **114 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约与边界。
+- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **131 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约与边界。
 - **真·引擎**：回溯求解器（MRV 启发）、唯一解题生成器（填盘 + 挖洞 + `countSolutions` 校验）、`Sudoku` 状态机（选格/填数/擦除/笔记/提示/撤销/计时/分难度最佳）。
-- **主题**：样式全走 `--sudoku-*` 契约层，内置 light / dark / high-contrast / sepia 四档，组件 `theme` 属性（含 `auto` 跟随系统）或直接写 `data-theme` 切换，逐色可覆盖。
+- **主题**：样式全走 `--sudoku-*` 契约层，内置 light / dark / high-contrast / sepia 四档。档位由**引擎持有**（`game.setTheme()` / `GameState.theme`，独立持久化在 `game-sudoku:theme`），组件 `theme` 属性只是初始值/受控覆盖，纯 vanilla 与 IIFE 宿主同样能用，逐色可覆盖。
 
 ## 本地跑起来
 
@@ -39,7 +39,7 @@ pnpm dev            # 起 playground，默认 http://127.0.0.1:5173
 pnpm build        # 三包 vite lib（core 四格式；vue/react ESM+CSS+DTS）
 pnpm verify:dist  # 断言 11 个必需产物存在且非 0 字节（防 --filter 空跑假绿）
 pnpm typecheck    # core / vue / react 全量 tsc --noEmit
-pnpm test         # core 单测（114 条）
+pnpm test         # core 单测（131 条）
 node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 ```
 
@@ -103,15 +103,22 @@ core 还产出 `dist/index.iife.js` 与 `dist/index.umd.js`，全局变量 **`Su
 <div id="app"></div>
 <script src="https://unpkg.com/@my-games/sudoku-core/dist/index.iife.js"></script>
 <script>
-  const { Sudoku } = SudokuCore;
-  const game = new Sudoku({ difficulty: 'easy' });
-  game.subscribe((state) => console.log(state.grid));
+  const { Sudoku, resolveTheme } = SudokuCore;
+  const game = new Sudoku({ difficulty: 'easy', theme: 'auto' });
+  const dark = matchMedia('(prefers-color-scheme: dark)');
+  const root = document.getElementById('app');
+  // 主题归引擎：档位存在 state.theme，宿主只把它解析成具体档写进 data-theme。
+  const applyTheme = () => { root.dataset.theme = resolveTheme(game.getTheme(), dark.matches); };
+  game.subscribe((state) => { console.log(state.grid); applyTheme(); });
+  dark.addEventListener('change', applyTheme); // 系统翻深浅时重算（setTheme 同值不会重推）
   game.select(0, 2);
   game.input(4);
 </script>
 ```
 
 > 样式在 `@my-games/sudoku-core/style.css`（随包发布的源样式），用 `<link>` 或你的打包器引入。
+> 主题档位（`light` / `dark` / `high-contrast` / `sepia` / `auto`）由引擎持有并持久化在
+> `game-sudoku:theme`，不依赖 Vue / React —— 上面这段就是纯浏览器的用法。
 
 ### Node.js（ESM / CJS）
 
@@ -153,7 +160,7 @@ sudoku/
 │   ├── core/   @my-games/sudoku-core  纯 TS 引擎
 │   │   ├── src/{types,board,solver,generator,game,storage,themes,index}.ts
 │   │   ├── src/style.css                 单份视觉 + 主题契约层，Vue/React 共享
-│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  114 单测
+│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  131 单测
 │   ├── vue/    @my-games/sudoku-vue   GameSudoku.vue + useGame + instance
 │   └── react/  @my-games/sudoku-react GameSudoku.tsx + useGame
 ├── playground/ Vite 三 tab 演示（Vanilla / Vue / React）
@@ -194,14 +201,15 @@ tag↔版本一致）→ `pnpm -r publish --access public --provenance`（OIDC T
 
 - **CSS 单点**：样式只放 `core/src/style.css` 一份，vue/react `import` 后各自抽出 `dist/index.css`
   （内容一致）；消费者显式引 CSS。（合集模板缺陷②「单复数 / 源与产物不对称」在本仓库已统一为 `./style.css`。）
-- **主题是 CSS 变量，不是 JS 注入**：core 保持零 DOM，档位就是一个 `data-theme` 属性。代价是四档色板
+- **主题是 CSS 变量 + 引擎状态**：core 保持零 DOM，落到页面上就是一个 `data-theme` 属性，但
+  档位本身存在引擎里（`GameState.theme`，独立键持久化），所以三种消费面接法一致。代价是四档色板
   在 CSS 里各写一份（约 32 个 `--sudoku-*` × 4 档），完整性、"布局层零硬编码色"、"两类数字
   的两套底色互差 ≥3:1"全部由 `test/theme.test.ts` 静态断言把关，不靠肉眼往返猜；配色另按
   WCAG 2.1 逐对实测（脚本见该文件与合集根 `.theme-contrast.mjs`）。
 - **`auto` 归适配层**：放进 CSS 会把深色那叠变量抄第二遍（`dark` 与「auto 且系统为深」生效条件不同，
   规则体无法共享），所以组件用 `matchMedia` 解析。副作用是深色系统下首帧有一次浅→深闪变。
 - **冲突不拦填**：允许把冲突值填进去并标红 + 计错误，贴近真实数独 App（区别于「非法直接拒绝」）。
-- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 114 条用例；适配层靠 `typecheck + build` 覆盖，
+- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 131 条用例；适配层靠 `typecheck + build` 覆盖，
   是否补 `@vue/test-utils` / `@testing-library/react` 是独立的、需新增依赖的决策。
 - **计时非高精度**：`elapsedSeconds` 靠注入 `clock` 差值，标签页挂起不计；够休闲游戏用。
 

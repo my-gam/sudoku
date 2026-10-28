@@ -33,9 +33,12 @@ unsub();
 ## 引擎 API
 
 - `new Sudoku(options?)` — 全可注入：`difficulty` / `rng` / `clock` / `storage` / `saveKey` /
-  `bestKey` / `freshStart` / `puzzle` / `solution` / `undoLimit`。默认 `difficulty:'easy'` 现场生成唯一解题。
+  `bestKey` / `theme` / `themeKey` / `freshStart` / `puzzle` / `solution` / `undoLimit`。
+  默认 `difficulty:'easy'` 现场生成唯一解题。
 - `game.subscribe(fn): () => void` — 注册即收一次快照，返回退订函数。
 - `game.getState()` — `GameState` 深拷贝快照；`getGrid()` / `getPuzzle()` / `getSolution()`。
+- 主题：`getTheme()` / `setTheme(next): boolean` / `getEffectiveTheme(prefersDark?)`，
+  档位也在 `GameState.theme` 里。详见下面「主题与样式契约」。
 - 操作：`select(row, col)` / `input(digit)` / `erase()` / `toggleNote(digit)` / `hint()` /
   `newGame(difficulty?)` / `undo()` / `canUndo()` / `clearSaved()`。
 - 求解/生成：`solve(grid)` / `countSolutions(grid, limit=2)` / `generatePuzzle(difficulty, rng)` /
@@ -67,8 +70,18 @@ unsub();
 <div class="game-sudoku" data-theme="dark">…</div>
 ```
 
-`auto`（跟随系统）**不在 CSS 里**，是适配层 / 宿主的解析结果：用 `matchMedia` 拿到深浅后
-调 `resolveTheme('auto', prefersDark)` 得到具体档再写入。手写 `data-theme="auto"` 得到默认浅色。
+`auto`（跟随系统）**不在 CSS 里**，是引擎 / 宿主的解析结果：用 `matchMedia` 拿到深浅后
+调 `resolveTheme('auto', prefersDark)`（或 `game.getEffectiveTheme(prefersDark)`）得到具体档
+再写入。手写 `data-theme="auto"` 得到默认浅色。
+
+**档位归引擎，不是组件属性**：`new Sudoku({ theme })` 设定初值，`game.setTheme(next)` 切换，
+当前档在 `GameState.theme` 里随快照推给所有订阅者。持久化落在独立的 `game-sudoku:theme`
+（与对局存档、best 分家），所以 IIFE / vanilla 宿主不必自己存一份。三条刻意的边界：
+
+- 主题**不进对局存档**：它是偏好，换难度、开新局都该保留，也不该牵动 `SAVE_VERSION` 守卫。
+- 主题**不进 undo 历史**：`setTheme` 不走 `commit()`，撤销一步不会把配色撤回去。
+- 初值优先级 `opts.theme` > 已持久化 > `DEFAULT_THEME`（`'light'`）；`setTheme` 收到登记表外
+  的值返回 `false` 且状态不动。
 
 自定义配色——**注意选择器**，四档预设全部写成 `:where(...)`，特异性恒为 0，所以：
 

@@ -37,11 +37,13 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 | `showPad` | `boolean` | `true` | 是否显示数字键盘 |
 | `showHint` | `boolean` | `false` | 是否显示「提示」按钮（`hint()` 始终在 ref / `useGame` 上） |
 | `title` | `string` | `'数独'` | 头部标题 |
-| `theme` | `'light'\|'dark'\|'high-contrast'\|'sepia'\|'auto'` | `'light'` | 根元素 `data-theme`；`auto` 由组件用 `matchMedia` 解析并跟随系统变化 |
+| `theme` | `'light'\|'dark'\|'high-contrast'\|'sepia'\|'auto'` | 不传（由引擎决定） | 初始 / 受控主题；渲染成根元素 `data-theme`，`auto` 由组件用 `matchMedia` 解析并跟随系统变化 |
 
-> `theme` 默认 `light`，不静默跟随系统。选 `auto` 时首帧按 `light` 渲染（与 SSR 输出一致、不报水合
-> 不匹配），系统为深色则挂载后有一次可见闪变；要消除请在服务端读 `Sec-CH-Prefers-Color-Scheme`
-> 后直接传具体档。逐项改配色见 core README「主题与样式契约」——覆盖要打在 `.game-sudoku` 上，
+> **档位的归属在 core 引擎**，不在组件里：不传 `theme` 时引擎读自己的持久化偏好
+> （`game-sudoku:theme`）并回落 `light`；传了则写回引擎。刷新后主题保持，且同一页面的多个
+> 实例共享这份偏好。选 `auto` 时首帧按 `light` 渲染（与 SSR 输出一致、不报水合不匹配），
+> 系统为深色则挂载后有一次可见闪变；要消除请在服务端读 `Sec-CH-Prefers-Color-Scheme` 后
+> 直接传具体档。逐项改配色见 core README「主题与样式契约」——覆盖要打在 `.game-sudoku` 上，
 > 写 `:root` 不生效。
 
 ## 事件
@@ -51,7 +53,8 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 
 ## Ref 命令式方法（`GameSudokuInstance`）
 
-`select / input / erase / toggleNote / hint / newGame / undo`。
+`select / input / erase / toggleNote / hint / newGame / undo / setTheme / getTheme`。
+`setTheme(next)` 直接打到引擎上（返回 `false` = 档位不合法），改完组件自己会重渲染。
 
 ## Composable（想自己画 UI）
 
