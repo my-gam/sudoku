@@ -18,6 +18,16 @@ export { generatePuzzle, generateFullGrid, TARGET_CLUES } from './generator';
 export type { GeneratedPuzzle } from './generator';
 
 export {
+  DEFAULT_THEME,
+  SUDOKU_DATA_THEMES,
+  SUDOKU_THEMES,
+  isTheme,
+  normalizeTheme,
+  resolveTheme
+} from './themes';
+export type { SudokuDataTheme, SudokuTheme } from './themes';
+
+export {
   BOX,
   DIGITS,
   SIZE,
