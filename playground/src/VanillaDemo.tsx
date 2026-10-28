@@ -48,7 +48,7 @@ export function VanillaDemo({
   difficulty = 'easy',
   autofocus = true,
   showHint = false,
-  theme = 'light',
+  theme,
   onDigit,
   onSolved
 }: VanillaDemoProps) {
@@ -57,22 +57,29 @@ export function VanillaDemo({
   const cb = useRef({ onDigit, onSolved });
   cb.current = { onDigit, onSolved };
 
-  // 主题只写 data-theme，不参与棋盘 DOM 重建；auto 解析成 light / dark 并跟随系统变化。
+  // 主题档位归引擎（core 的 setTheme / GameState.theme），本组件只做两件事：
+  // 把 prop 推进引擎、把引擎状态渲染成根元素 data-theme。
+  // 刻意不进 DOM 构建 effect 的依赖 —— 换主题不该重建棋盘（那会白丢 undo 历史）。
+  const gameRef = useRef<Sudoku | null>(null);
+  const applyThemeRef = useRef<((next: SudokuTheme) => void) | null>(null);
+  const prefersDarkRef = useRef(false);
+
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      host.dataset.theme = resolveTheme(theme, false);
-      return;
-    }
-    const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = (): void => {
-      host.dataset.theme = resolveTheme(theme, query.matches);
-    };
-    apply();
-    query.addEventListener('change', apply);
-    return () => query.removeEventListener('change', apply);
+    if (theme !== undefined) gameRef.current?.setTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    prefersDarkRef.current = query.matches;
+    const onChange = (): void => {
+      prefersDarkRef.current = query.matches;
+      const engine = gameRef.current;
+      if (engine) applyThemeRef.current?.(engine.getState().theme);
+    };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -155,9 +162,19 @@ export function VanillaDemo({
     host.appendChild(pad);
 
     // ---- 引擎 ----
-    const game = new Sudoku({ saveKey, bestKey, difficulty });
+    // 这里的 theme 只作「初始档位」：本 effect 的依赖刻意不含 theme，后续变更由上面那个
+    // push effect 走 game.setTheme()，避免换主题重建整块棋盘。
+    const game = new Sudoku({ saveKey, bestKey, difficulty, theme });
+    gameRef.current = game;
+
+    // data-theme 由引擎档位解析而来（auto → light/dark 靠宿主喂进来的 matchMedia 结果）。
+    const applyTheme = (next: SudokuTheme): void => {
+      host.dataset.theme = resolveTheme(next, prefersDarkRef.current);
+    };
+    applyThemeRef.current = applyTheme;
 
     const render = (state: GameState): void => {
+      applyTheme(state.theme);
       if (timeEl) timeEl.textContent = formatTime(state.elapsedSeconds);
       if (bestEl) bestEl.textContent = state.bestSeconds === null ? '—' : formatTime(state.bestSeconds);
       if (mistakeEl) mistakeEl.textContent = String(state.mistakeCount);
@@ -281,6 +298,8 @@ export function VanillaDemo({
       pad.removeEventListener('click', onPad);
       board.removeEventListener('click', onBoardClick);
       unsub();
+      gameRef.current = null;
+      applyThemeRef.current = null;
     };
   }, [saveKey, bestKey, difficulty, autofocus, showHint]);
 

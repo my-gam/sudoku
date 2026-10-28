@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import '@my-games/sudoku-core/style.css';
-import { DEFAULT_THEME, resolveTheme } from '@my-games/sudoku-core';
+import { resolveTheme } from '@my-games/sudoku-core';
 import { useGame } from './useGame';
 import type { Digit, Difficulty, SaveStorage, SudokuTheme } from '@my-games/sudoku-core';
 
@@ -12,8 +12,10 @@ import type { Digit, Difficulty, SaveStorage, SudokuTheme } from '@my-games/sudo
  * - 点击格子选中；数字面板 / 键盘 1-9 填数；N 切笔记模式；Backspace/Delete 擦除；方向键移动选中。
  * - 键盘走 window keydown，但严格判 `document.activeElement === boardEl`，多实例并存只活动那个响应。
  * - 视觉/类名全部复用 core 的 style.css，与 React 版行为对齐。
- * - 主题：`theme` 决定根元素 `data-theme`。core 的 CSS 只承载 4 个具体预设，`auto`
- *   在这里用 matchMedia 解析成 light / dark 后写入，并监听系统偏好变化实时切换。
+ * - 主题：档位的**归属在引擎**（`Sudoku.setTheme` / `GameState.theme`，落在独立的
+ *   `game-sudoku:theme` 键）。本组件只做两件事：把 `theme` prop 写进引擎，以及把引擎
+ *   推来的 `state.theme` 渲染成根元素 `data-theme`。core 的 CSS 只承载 4 个具体预设，
+ *   `auto` 在这里用 matchMedia 解析成 light / dark 后写入，并监听系统偏好变化实时切换。
  */
 
 interface Props {
@@ -26,6 +28,7 @@ interface Props {
   title?: string;
   showPad?: boolean;
   showHint?: boolean;
+  /** 初始 / 受控主题。不传则由引擎读持久化偏好，最终回落 `light`。 */
   theme?: SudokuTheme;
 }
 
@@ -39,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: '数独',
   showPad: true,
   showHint: false,
-  theme: DEFAULT_THEME
+  theme: undefined
 });
 
 const emit = defineEmits<{
@@ -52,7 +55,8 @@ const { state, raw, select, input, erase, toggleNote, hint, newGame, undo } = us
   storage: props.storage,
   saveKey: props.saveKey,
   bestKey: props.bestKey,
-  freshStart: props.freshStart
+  freshStart: props.freshStart,
+  theme: props.theme
 });
 
 const boardEl = ref<HTMLDivElement | null>(null);
@@ -64,8 +68,12 @@ let schemeQuery: MediaQueryList | null = null;
 function onSchemeChange(ev: MediaQueryListEvent): void {
   prefersDark.value = ev.matches;
 }
-/** 写进根元素 data-theme 的最终档位：auto 已解析成 light / dark。 */
-const resolvedTheme = computed(() => resolveTheme(props.theme, prefersDark.value));
+/**
+ * 写进根元素 data-theme 的最终档位。
+ * 读的是**引擎状态**而不是 prop —— 否则宿主通过 ref.setTheme() 改主题时 UI 不跟着走，
+ * 就成了「prop 一个值、引擎一个值」的双真相。
+ */
+const resolvedTheme = computed(() => resolveTheme(state.value.theme, prefersDark.value));
 // 用时每秒刷新：core 只在操作时推快照，这里用 tick 触发对 raw.getState() 的实时重读。
 const tick = ref(0);
 let timerId: number | undefined;
@@ -203,6 +211,14 @@ function onKey(ev: KeyboardEvent): void {
   select(row, col);
 }
 
+// 受控用法：宿主改了 theme prop 就写回引擎（undefined 表示交还引擎自己决定，不覆盖）。
+watch(
+  () => props.theme,
+  (next) => {
+    if (next !== undefined) raw.setTheme(next);
+  }
+);
+
 let lastStatus = state.value.status;
 watch(
   () => state.value.status,
@@ -236,7 +252,18 @@ onBeforeUnmount(() => {
   stopTimer();
 });
 
-defineExpose({ select, input, erase, toggleNote, hint, newGame, undo });
+defineExpose({
+  select,
+  input,
+  erase,
+  toggleNote,
+  hint,
+  newGame,
+  undo,
+  // 主题走引擎；这里包一层是为了保住 this（直接写 raw.setTheme 交出的是脱离实例的引用）。
+  setTheme: (next: SudokuTheme): boolean => raw.setTheme(next),
+  getTheme: (): SudokuTheme => raw.getTheme()
+});
 </script>
 
 <template>

@@ -10,7 +10,7 @@ import {
   useState
 } from 'react';
 import '@my-games/sudoku-core/style.css';
-import { DEFAULT_THEME, resolveTheme } from '@my-games/sudoku-core';
+import { resolveTheme } from '@my-games/sudoku-core';
 import type { Difficulty, Digit, GameState, SaveStorage, SudokuTheme } from '@my-games/sudoku-core';
 import { useGame } from './useGame';
 
@@ -18,6 +18,8 @@ import { useGame } from './useGame';
  * GameSudoku —— React 18/19 组件，行为与 Vue 版对齐。
  * 键盘：数字 1-9 填数 / N 切笔记 / Backspace·Delete 擦除 / 方向键移动选中；
  * 严格判 `document.activeElement === board`，多实例并存只活动那个响应。
+ * 主题档位的归属在 core 引擎（`setTheme` / `GameState.theme`，独立持久化键），本组件只把
+ * 引擎状态渲染成根元素 `data-theme`，`auto` 用 matchMedia 解析。
  */
 
 export interface GameSudokuProps {
@@ -31,7 +33,10 @@ export interface GameSudokuProps {
   title?: string;
   className?: string;
   showHint?: boolean;
-  /** 主题档；`auto` 由本组件用 matchMedia 解析成 light / dark。默认 light，不静默跟随系统。 */
+  /**
+   * 初始 / 受控主题。不传则由引擎读它自己的持久化偏好（`game-sudoku:theme`），最终回落
+   * `light`。`'auto'` 由本组件用 matchMedia 解析成 light / dark 并跟随系统变化。
+   */
   theme?: SudokuTheme;
   onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (payload: { difficulty: Difficulty; seconds: number }) => void;
@@ -45,6 +50,10 @@ export interface GameSudokuHandle {
   hint(): boolean;
   newGame(difficulty?: Difficulty): void;
   undo(): boolean;
+  /** 切主题并落盘（引擎侧能力）；返回 false = 档位不合法。 */
+  setTheme(next: SudokuTheme): boolean;
+  /** 引擎当前的请求档（可能是 'auto'）。 */
+  getTheme(): SudokuTheme;
 }
 
 const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -117,7 +126,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     title = '数独',
     className,
     showHint = false,
-    theme = DEFAULT_THEME,
+    theme,
     onDigit,
     onSolved
   } = props;
@@ -127,7 +136,8 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     storage,
     saveKey,
     bestKey,
-    freshStart
+    freshStart,
+    theme
   });
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -143,8 +153,12 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     query.addEventListener('change', onChange);
     return () => query.removeEventListener('change', onChange);
   }, []);
-  /** 写进根元素 data-theme 的最终档位：auto 已解析成 light / dark。 */
-  const resolvedTheme = resolveTheme(theme, prefersDark);
+  /** 写进根元素 data-theme 的最终档位。读引擎状态而非 prop —— 避免双真相。 */
+  const resolvedTheme = resolveTheme(state.theme, prefersDark);
+  // 受控用法：宿主换 theme prop 时写回引擎；undefined 表示交还引擎自己决定。
+  useEffect(() => {
+    if (theme !== undefined) game.setTheme(theme);
+  }, [theme, game]);
   // 用时每秒刷新：core 只在操作时推快照，tick 触发重绘后由 game.getState() 读实时值。
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -223,8 +237,18 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
 
   useImperativeHandle(
     ref,
-    () => ({ select, input, erase, toggleNote, hint, newGame, undo }),
-    [select, input, erase, toggleNote, hint, newGame, undo]
+    () => ({
+      select,
+      input,
+      erase,
+      toggleNote,
+      hint,
+      newGame,
+      undo,
+      setTheme: (next: SudokuTheme): boolean => game.setTheme(next),
+      getTheme: (): SudokuTheme => game.getTheme()
+    }),
+    [select, input, erase, toggleNote, hint, newGame, undo, game]
   );
 
   const won = state.status === 'won';

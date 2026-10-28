@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameSudoku as GameSudokuReact } from '@my-games/sudoku-react';
-import { normalizeTheme, resolveTheme } from '@my-games/sudoku-core';
+import {
+  DEFAULT_THEME,
+  DEFAULT_THEME_KEY,
+  isTheme,
+  loadTheme,
+  resolveTheme,
+  tryGetGlobalStorage
+} from '@my-games/sudoku-core';
 import type { Digit, SudokuTheme } from '@my-games/sudoku-core';
 import { VuePanel } from './VuePanel';
 import { VanillaDemo } from './VanillaDemo';
@@ -37,10 +44,15 @@ function initialDemo(): Demo {
   return raw === 'vue' || raw === 'react' ? raw : 'vanilla';
 }
 
-/** URL 里的 ?theme= 是不可信输入，交给 core 的 normalizeTheme 归一，非法值退回 light。 */
+/**
+ * 初始主题优先级：URL ?theme= > 引擎持久化的偏好（game-sudoku:theme）> light。
+ * URL 值是不可信输入，交给 core 的 normalizeTheme 归一；持久化值由 loadTheme 自己挡非法。
+ */
 function initialTheme(): SudokuTheme {
   if (typeof window === 'undefined') return 'light';
-  return normalizeTheme(new URLSearchParams(window.location.search).get('theme'));
+  const fromUrl = new URLSearchParams(window.location.search).get('theme');
+  if (isTheme(fromUrl)) return fromUrl;
+  return loadTheme(tryGetGlobalStorage(), DEFAULT_THEME_KEY) ?? DEFAULT_THEME;
 }
 
 function formatFill(e: { digit: Digit; changed: boolean; row: number; col: number }): string {
@@ -213,9 +225,11 @@ export function App() {
           有各自独立的事件日志（切换 tab 即切换日志），填数记录形如 <code>(行,列) ← 数字</code>（1 起算，
           无效填数标注"无效"）。三 tab 各自独立 localStorage 键（<code>sudoku-&lt;tab&gt;:save</code> /
           <code>:best</code>），切换不打断对局。键盘：1-9 填数、N 笔记、Backspace 擦除、方向键移动选中。
-          「提示」默认不常驻，只作 API；加 <code>?hint=1</code> 显示按钮。主题由上方切换器写进组件根元素的
-          <code>data-theme</code>，走 core 的 <code>--sudoku-*</code> 契约层；「跟随系统」= <code>auto</code>，
-          由 <code>matchMedia</code> 解析成具体档（右侧会显示当前真正生效的值）。
+          「提示」默认不常驻，只作 API；加 <code>?hint=1</code> 显示按钮。主题档位归
+          <code>@my-games/sudoku-core</code> 引擎所有（<code>game.setTheme()</code> /
+          <code>GameState.theme</code>），落在独立的 <code>game-sudoku:theme</code> 键里，
+          <b>刷新后保持</b>；三个 tab 共享这一份偏好。<code>auto</code> = 跟随系统，由
+          <code>matchMedia</code> 解析成具体档（右侧回显真正生效的值）。
         </p>
       </details>
 
