@@ -37,6 +37,12 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 | `showPad` | `boolean` | `true` | 是否显示数字键盘 |
 | `showHint` | `boolean` | `false` | 是否显示「提示」按钮（`hint()` 始终在 ref / `useGame` 上） |
 | `title` | `string` | `'数独'` | 头部标题 |
+| `theme` | `'light'\|'dark'\|'high-contrast'\|'sepia'\|'auto'` | `'light'` | 根元素 `data-theme`；`auto` 由组件用 `matchMedia` 解析并跟随系统变化 |
+
+> `theme` 默认 `light`，不静默跟随系统。选 `auto` 时首帧按 `light` 渲染（与 SSR 输出一致、不报水合
+> 不匹配），系统为深色则挂载后有一次可见闪变；要消除请在服务端读 `Sec-CH-Prefers-Color-Scheme`
+> 后直接传具体档。逐项改配色见 core README「主题与样式契约」——覆盖要打在 `.game-sudoku` 上，
+> 写 `:root` 不生效。
 
 ## 事件
 

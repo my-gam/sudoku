@@ -28,8 +28,14 @@ export function Demo() {
 ## Props
 
 同 Vue 版：`difficulty` / `storage` / `saveKey` / `bestKey` / `freshStart` / `autofocus` / `showPad` /
-`showHint`（默认 `false`，`hint()` 始终在句柄 / `useGame` 上）/ `title`，另有 `className`（追加到最外层
+`showHint`（默认 `false`，`hint()` 始终在句柄 / `useGame` 上）/ `title` / `theme`，另有 `className`（追加到最外层
 `.game-sudoku`）、`onDigit({ digit, changed, row, col })`、`onSolved({ difficulty, seconds })`。
+
+`theme?: SudokuTheme`（`'light'|'dark'|'high-contrast'|'sepia'|'auto'`，默认 `'light'`）决定根元素的
+`data-theme`。传 `'auto'` 时组件用 `matchMedia` 解析成 `light`/`dark` 并监听系统偏好变化；首帧一律按
+`light` 渲染，所以系统为深色时挂载后会有一次可见闪变——要消除请在服务端读
+`Sec-CH-Prefers-Color-Scheme` 后直接传具体档。配色可逐项覆盖，见 core README「主题与样式契约」
+（注意覆盖要打在 `.game-sudoku` 上，写 `:root` 不生效）。
 
 ## Ref 命令式方法（`GameSudokuHandle`）
 
