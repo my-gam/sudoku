@@ -84,19 +84,26 @@ unsub();
 :root { --sudoku-cell-bg: #101820; }
 ```
 
-可覆盖的完整清单（约 30 个，四档均已给值）：结构线 `--sudoku-line-strong` /
+可覆盖的完整清单（约 32 个，四档均已给值）：结构线 `--sudoku-line-strong` /
 `--sudoku-line-soft` / `--sudoku-cell-bg`；文字 `--sudoku-text-base` / `--sudoku-text-given` /
 `--sudoku-text-user` / `--sudoku-text-muted`；题面数字 `--sudoku-given-bg` /
-`--sudoku-given-weight`；高亮 `--sudoku-hl-selected` / `--sudoku-hl-peer` / `--sudoku-hl-same` /
+`--sudoku-given-weight`；玩家数字 `--sudoku-user-bg` / `--sudoku-user-ink-on-tint`；
+高亮 `--sudoku-hl-selected` / `--sudoku-hl-peer` / `--sudoku-hl-same` /
 `--sudoku-bad-bg` / `--sudoku-bad-text`；强调 `--sudoku-accent` / `--sudoku-accent-dark` /
 `--sudoku-on-accent` / `--sudoku-focus-ring`；控件 `--sudoku-chip-bg` / `--sudoku-button-bg` /
 `--sudoku-button-bg-hover` / `--sudoku-pad-bg` / `--sudoku-pad-bg-hover` / `--sudoku-pad-text` /
 `--sudoku-stat-text` / `--sudoku-danger-text` / `--sudoku-overlay-bg`；几何 `--sudoku-board-size` /
 `--sudoku-box-gap` / `--sudoku-cell-gap` / `--sudoku-radius`。
 
-题面给定数字走**淡底 + 字重**双通道（不是只靠加粗）：Android 的 Roboto 没有 800 一档，
-16px 下 800 与 500 拉不开；窄屏另有 `@media (max-width: 420px)` 单独把给定数字号抬半档。
-四档配色按 WCAG 2.1 逐对实测过线（数字与笔记按小字号 4.5:1 判）。
+**题面数字与玩家数字为什么长这样**：给定 = 中性淡底上的墨色粗字，玩家 = 实心色块上的反白字。
+原因是个数学事实——同一张浅底上，两个颜色若都要过 4.5:1（AA 正文），彼此最多差约 1.28:1，
+所以「只改字色」永远做不到一眼区分，必须动底色。字重差异（700 vs 500）保留但只作辅助通道
+（Android 的 Roboto 没有 800 一档，16px 下 800 与 500 本来就拉不开）；窄屏另有
+`@media (max-width: 420px)` 单独把给定数字号抬半档。
+玩家格被选中/同数/同行高亮盖住时改用 `--sudoku-user-ink-on-tint`（否则反白字会压在浅色填充上
+看不见），冲突态再压过它回到红字——这两条顺序都有测试盯着。
+四档配色按 WCAG 2.1 逐对实测过线，且「两套底色互差 ≥3:1」「色块与普通格子互差 ≥3:1」
+是 `test/theme.test.ts` 里的硬断言。
 
 ## 规则要点
 

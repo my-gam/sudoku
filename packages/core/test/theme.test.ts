@@ -187,6 +187,21 @@ describe('style.css 主题契约层', () => {
     expect(offenders, '布局层出现硬编码颜色').toEqual([]);
   });
 
+  it('玩家数字也走「彩底 + 颜色 + 字重」，且与给定淡底彼此可辨', () => {
+    const rule = RULES.find((r) => r.selector === '.game-sudoku-cell.is-user');
+    if (!rule) throw new Error('找不到 .game-sudoku-cell.is-user 规则');
+    const d = declMap(rule);
+    expect(d.get('color')).toBe('var(--text-user)');
+    expect(d.get('background')).toBe('var(--user-bg)');
+    for (const p of PRESETS) {
+      const t = declMap(p.rule);
+      const userBg = t.get('--sudoku-user-bg');
+      expect(userBg, `${p.name} 缺 user-bg`).toBeTruthy();
+      expect(userBg === t.get('--sudoku-cell-bg'), `${p.name} 玩家淡底与格子同色`).toBe(false);
+      expect(userBg === t.get('--sudoku-given-bg'), `${p.name} 玩家淡底与给定淡底同色`).toBe(false);
+    }
+  });
+
   it('给定数字走「底色 + 字重」双通道（不能退回只靠字重）', () => {
     const rule = RULES.find((r) => r.selector === '.game-sudoku-cell.is-given');
     if (!rule) throw new Error('找不到 .game-sudoku-cell.is-given 规则');
@@ -196,19 +211,21 @@ describe('style.css 主题契约层', () => {
     expect(d.get('color')).toBe('var(--text-given)');
   });
 
-  it('is-given 排在同行同数/选中高亮之前，保证高亮压得过给定底色', () => {
+  it('is-given / is-user 排在同行同数/选中高亮之前，保证高亮压得过两种淡底', () => {
     const at = (sel: string): number => {
       const idx = CSS.indexOf(`\n${sel} {`);
       if (idx < 0) throw new Error(`找不到规则 ${sel}`);
       return idx;
     };
-    const given = at('.game-sudoku-cell.is-given');
-    for (const sel of [
-      '.game-sudoku-cell.is-peer',
-      '.game-sudoku-cell.is-same',
-      '.game-sudoku-cell.is-selected'
-    ]) {
-      expect(given, `${sel} 必须排在 is-given 之后`).toBeLessThan(at(sel));
+    for (const plate of ['.game-sudoku-cell.is-given', '.game-sudoku-cell.is-user']) {
+      const base = at(plate);
+      for (const sel of [
+        '.game-sudoku-cell.is-peer',
+        '.game-sudoku-cell.is-same',
+        '.game-sudoku-cell.is-selected'
+      ]) {
+        expect(base, `${plate} 必须排在 ${sel} 之前`).toBeLessThan(at(sel));
+      }
     }
   });
 
@@ -268,6 +285,84 @@ describe('style.css 给定数字字重', () => {
       expect([100, 200, 300, 400, 500, 600, 700, 800, 900], `${p.name} 非法字重`).toContain(w);
       expect(w, `${p.name} 字重回到 800`).toBeLessThanOrEqual(700);
     }
+  });
+});
+
+describe('给定数字 vs 玩家数字的可辨识度', () => {
+  // 「不够明显」这种反馈不该靠肉眼往返猜，这里把判据钉成断言：
+  // 底色块之间按 WCAG 1.4.11 非文本对比 ≥3:1；文字压底按 1.4.3 正文 ≥4.5:1。
+  const chan = (v: string): number => {
+    const c = parseInt(v, 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = (hex: string): number => {
+    const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+    if (!m || !m[1]) throw new Error(`契约层出现非 #rrggbb 的颜色：${hex}`);
+    const n = m[1];
+    return 0.2126 * chan(n.slice(0, 2)) + 0.7152 * chan(n.slice(2, 4)) + 0.0722 * chan(n.slice(4, 6));
+  };
+  const contrast = (a: string, b: string): number => {
+    const [x, y] = [lum(a), lum(b)];
+    const [hi, lo] = x > y ? [x, y] : [y, x];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const need = (p: PresetEntry, token: string): string => {
+    const v = declMap(p.rule).get(token);
+    if (!v) throw new Error(`预设 ${p.name} 缺 ${token}`);
+    return v;
+  };
+
+  it('给定淡底与玩家色块互差 ≥3:1（这是"一眼区分"的主通道）', () => {
+    for (const p of PRESETS) {
+      const r = contrast(need(p, '--sudoku-given-bg'), need(p, '--sudoku-user-bg'));
+      expect(r, `${p.name} 两块底几乎同色，区分度不足：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('玩家色块压普通格子底 ≥3:1（色块要跳得出来）', () => {
+    for (const p of PRESETS) {
+      const r = contrast(need(p, '--sudoku-user-bg'), need(p, '--sudoku-cell-bg'));
+      expect(r, `${p.name} 色块和格子分不开：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('玩家反白字压自己色块 ≥4.5:1', () => {
+    for (const p of PRESETS) {
+      const r = contrast(need(p, '--sudoku-text-user'), need(p, '--sudoku-user-bg'));
+      expect(r, `${p.name} 玩家数字读数不达标：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('高亮态深色字压住选中/同数/同行三种浅色填充，全部 ≥4.5:1', () => {
+    for (const p of PRESETS) {
+      const ink = need(p, '--sudoku-user-ink-on-tint');
+      for (const tint of ['--sudoku-hl-selected', '--sudoku-hl-same', '--sudoku-hl-peer']) {
+        const r = contrast(ink, need(p, tint));
+        expect(r, `${p.name} 玩家数字压 ${tint} 上只有 ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('给定墨字压给定淡底 ≥7:1（题面数字是全场最该清晰的）', () => {
+    for (const p of PRESETS) {
+      const r = contrast(need(p, '--sudoku-text-given'), need(p, '--sudoku-given-bg'));
+      expect(r, `${p.name} 给定数字对比不足：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(7);
+    }
+  });
+
+  it('玩家格被高亮覆盖时必须改用深色字，冲突态再压过它', () => {
+    const at = (sel: string): number => {
+      const idx = CSS.indexOf(`\n${sel},`) === -1 ? CSS.indexOf(`\n${sel} {`) : CSS.indexOf(`\n${sel},`);
+      if (idx < 0) throw new Error(`找不到规则 ${sel}`);
+      return idx;
+    };
+    const onTint = at('.game-sudoku-cell.is-user.is-peer');
+    const conflict = at('.game-sudoku-cell.is-conflict');
+    expect(onTint, '高亮态深色字规则缺失').toBeGreaterThan(-1);
+    expect(conflict, '冲突态必须在「高亮态深色字」之后，否则选中的错格看不到红字').toBeGreaterThan(onTint);
+    const rule = RULES.find((r) => r.selector.includes('.game-sudoku-cell.is-user.is-peer'));
+    if (!rule) throw new Error('找不到玩家格高亮态规则');
+    expect(declMap(rule).get('color')).toBe('var(--user-ink-on-tint)');
   });
 });
 

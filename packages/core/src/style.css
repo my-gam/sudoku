@@ -30,12 +30,16 @@
  * 间距即可，无需 nth-child 取模去判边界。
  *
  * 约定：
- * - 题面给定数字走**双通道**区分：淡底（--given-bg）+ 真实存在的字重档（默认 700），
- *   玩家填入的数字无底色、走 accent 色系。不单独依赖字重——Android 的 Roboto 没有
- *   800 一档（会落到 700），16px 下与 500 拉不开。
- * - 冲突格红底；选中格高亮 + 同数/同行列宫淡色提示；空格用 .cell-notes 3×3 迷你格画
- *   铅笔标记。淡底规则顺序有意排在 is-peer/is-same/is-selected 之前，保证选中高亮压过它。
- * - 尺寸自适应：容器宽度决定一切，clamp() 缩放，320px～520px 视觉合理。
+ * - 题面给定数字与玩家数字用**两套不同的底**区分：给定 = 中性淡底上的墨色粗字
+ *   （--given-bg / --text-given / --given-weight）；玩家 = 实心色块上的反白字
+ *   （--user-bg / --text-user）。为什么必须动底色：同一张浅底上两个颜色若都要过 4.5:1
+ *   （AA 正文），彼此最多差约 1.28:1，光靠字色在数学上就不可能"一眼区分"。
+ *   字重仍保留差异（700 vs 500），但它是辅助通道——Android 的 Roboto 没有 800 一档，
+ *   16px 下 800 与 500 本来就拉不开。
+ * - 玩家格被 选中/同数/同行 三类浅色填充盖住时改用深色字（--user-ink-on-tint），冲突态
+ *   再压过它回到红字。规则顺序是这套配色能成立的前提，全部由 test/theme.test.ts 盯住。
+ * - 冲突格红底；空格用 .cell-notes 3×3 迷你格画铅笔标记（笔记只出现在空格，与两类淡底
+ *   结构互斥）。尺寸自适应：容器宽度决定一切，clamp() 缩放，320px～520px 视觉合理。
  * - prefers-reduced-motion 下关过渡/动画。
  */
 
@@ -52,12 +56,16 @@
   --sudoku-line-soft: #93a3b3;
   --sudoku-cell-bg: #ffffff;
 
-  /* 文字与题面数字 */
+  /* 文字与题面数字：给定 = 纸面墨色压中性淡底；玩家 = 反白字压实心色块。
+     同一张浅底上两个都要过 4.5:1 的颜色，彼此最多差 1.28:1，所以区分度只能靠底色块。 */
   --sudoku-text-base: #1f2d3d;
-  --sudoku-text-given: #1f2d3d;
-  --sudoku-given-bg: #f2f5f8;
+  --sudoku-text-given: #14202b;
+  --sudoku-given-bg: #dfe8f1;
   --sudoku-given-weight: 700;
-  --sudoku-text-user: #1c63b5;
+  --sudoku-text-user: #ffffff;
+  --sudoku-user-bg: #1f6fc4;
+  /* 玩家格被 选中/同数/同行 这类浅色填充盖住时，反白字会看不见，故高亮态另给一支深色字。 */
+  --sudoku-user-ink-on-tint: #14539d;
   --sudoku-text-muted: #5f7182;
 
   /* 高亮 */
@@ -79,7 +87,7 @@
   --sudoku-button-bg-hover: #d7e2ec;
   --sudoku-pad-bg: #eef3f8;
   --sudoku-pad-bg-hover: #dfeaf5;
-  --sudoku-pad-text: #1c63b5;
+  --sudoku-pad-text: #14539d;
   --sudoku-stat-text: #ffffff;
   --sudoku-danger-text: #ffb3b3;
   --sudoku-overlay-bg: rgba(255, 255, 255, 0.86);
@@ -101,10 +109,12 @@
   --sudoku-cell-bg: #1b222c;
 
   --sudoku-text-base: #dbe4ee;
-  --sudoku-text-given: #f3f7fb;
-  --sudoku-given-bg: #26313d;
+  --sudoku-text-given: #f7fafd;
+  --sudoku-given-bg: #374552;
   --sudoku-given-weight: 700;
-  --sudoku-text-user: #8ec9ff;
+  --sudoku-text-user: #08131f;
+  --sudoku-user-bg: #57a6f5;
+  --sudoku-user-ink-on-tint: #a8d8ff;
   --sudoku-text-muted: #9db0c2;
 
   /* 三级高亮按亮度递进；玩家数字压在最亮的一档上仍要过 4.5:1，所以整体压低一档 */
@@ -124,7 +134,7 @@
   --sudoku-button-bg-hover: #384557;
   --sudoku-pad-bg: #24303e;
   --sudoku-pad-bg-hover: #2f3f52;
-  --sudoku-pad-text: #8fc4ff;
+  --sudoku-pad-text: #a8d8ff;
   --sudoku-stat-text: #cfd9e4;
   --sudoku-danger-text: #ff8f8f;
   --sudoku-overlay-bg: rgba(12, 17, 23, 0.86);
@@ -149,7 +159,9 @@
   --sudoku-text-given: #ffffff;
   --sudoku-given-bg: #1c1c1c;
   --sudoku-given-weight: 700;
-  --sudoku-text-user: #ffe95c;
+  --sudoku-text-user: #000000;
+  --sudoku-user-bg: #ffd400;
+  --sudoku-user-ink-on-tint: #ffe95c;
   --sudoku-text-muted: #d2d2d2;
 
   /* 高亮做三级灰阶递进（黑底上淡色 tint 基本看不见），且都保证白字仍 ≥5:1 */
@@ -190,10 +202,12 @@
   --sudoku-cell-bg: #f6ecd9;
 
   --sudoku-text-base: #3a2e22;
-  --sudoku-text-given: #2c2118;
-  --sudoku-given-bg: #e9dcc3;
+  --sudoku-text-given: #241a10;
+  --sudoku-given-bg: #dbc8a4;
   --sudoku-given-weight: 700;
-  --sudoku-text-user: #0f5b47;
+  --sudoku-text-user: #fdf6ea;
+  --sudoku-user-bg: #8a5a2b;
+  --sudoku-user-ink-on-tint: #0d5340;
   --sudoku-text-muted: #67563f;
 
   --sudoku-hl-selected: #f0d7a3;
@@ -212,7 +226,7 @@
   --sudoku-button-bg-hover: #dccdb2;
   --sudoku-pad-bg: #efe3cd;
   --sudoku-pad-bg-hover: #e3d3b7;
-  --sudoku-pad-text: #0f5b47;
+  --sudoku-pad-text: #0d5340;
   --sudoku-stat-text: #fdf6ea;
   --sudoku-danger-text: #ffc9bd;
   --sudoku-overlay-bg: rgba(246, 236, 217, 0.88);
@@ -237,6 +251,8 @@
   --given-bg: var(--sudoku-given-bg);
   --given-weight: var(--sudoku-given-weight);
   --text-user: var(--sudoku-text-user);
+  --user-bg: var(--sudoku-user-bg);
+  --user-ink-on-tint: var(--sudoku-user-ink-on-tint);
   --text-muted: var(--sudoku-text-muted);
 
   --hl-selected: var(--sudoku-hl-selected);
@@ -474,8 +490,11 @@
   font-weight: var(--given-weight);
 }
 
+/* 玩家填入的数字：自己的色 + 自己的淡底（与给定格的中性淡底形成「底色色相」这条通道）。
+   同样必须排在 is-peer / is-same / is-selected 之前，让选中/关联高亮压过它。 */
 .game-sudoku-cell.is-user {
   color: var(--text-user);
+  background: var(--user-bg);
 }
 
 .game-sudoku-cell.is-peer {
@@ -490,7 +509,18 @@
   background: var(--hl-selected);
 }
 
-.game-sudoku-cell.is-conflict {
+/* 玩家格的实心色块被上面三种浅色高亮填充盖住时，反白字会直接看不见 → 这几态改用深色字。
+   特异性 (0,3,0) 压过 .is-user 的 (0,2,0)，且必须排在三个高亮规则之后。 */
+.game-sudoku-cell.is-user.is-peer,
+.game-sudoku-cell.is-user.is-same,
+.game-sudoku-cell.is-user.is-selected {
+  color: var(--user-ink-on-tint);
+}
+
+/* 冲突态排在最后且并列 (0,3,0)：既压过淡底也压过上面那条「高亮态深色字」，
+   选中一个填错的格子时必须看到红字，而不是玩家本色。 */
+.game-sudoku-cell.is-conflict,
+.game-sudoku-cell.is-user.is-conflict {
   background: var(--bad);
   color: var(--bad-text);
 }

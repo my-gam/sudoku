@@ -16,7 +16,7 @@
 
 - **技术栈**：TypeScript 7（Go-native tsgo）· Vite 8（Rolldown）· Vue 3.5 · React 19（peerDep 兼容 18.2+）· Vitest 5
 - **包结构**：`packages/core` + `packages/vue` + `packages/react`，pnpm workspace；`playground/` 是三 tab 演示页（Vanilla / Vue / React）。
-- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **107 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约与边界。
+- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **114 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约与边界。
 - **真·引擎**：回溯求解器（MRV 启发）、唯一解题生成器（填盘 + 挖洞 + `countSolutions` 校验）、`Sudoku` 状态机（选格/填数/擦除/笔记/提示/撤销/计时/分难度最佳）。
 - **主题**：样式全走 `--sudoku-*` 契约层，内置 light / dark / high-contrast / sepia 四档，组件 `theme` 属性（含 `auto` 跟随系统）或直接写 `data-theme` 切换，逐色可覆盖。
 
@@ -39,7 +39,7 @@ pnpm dev            # 起 playground，默认 http://127.0.0.1:5173
 pnpm build        # 三包 vite lib（core 四格式；vue/react ESM+CSS+DTS）
 pnpm verify:dist  # 断言 11 个必需产物存在且非 0 字节（防 --filter 空跑假绿）
 pnpm typecheck    # core / vue / react 全量 tsc --noEmit
-pnpm test         # core 单测（107 条）
+pnpm test         # core 单测（114 条）
 node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 ```
 
@@ -53,7 +53,7 @@ node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 - 点格子选中（或用方向键移动），按数字 1-9 / 点数字面板填入；`N` 切铅笔笔记，`Backspace` 擦除。
 - 题面给定数字（深色加粗）不可改；填错（与同行/列/宫重复）会标红并计一次错误，但不强制拦下。
 - 填满且无冲突即通关，按难度记录最佳用时（用时从第一次真正动手起算：填数、擦除、记笔记、提示都算开始游戏，只有选格浏览不计时）。「提示」填对一格，「撤销」回退，难度条即时重开一局。
-- 题面给定数字与玩家填入靠「淡底 + 字重 + 颜色」三条通道区分（不只靠加粗，Android 小屏上 800 与 500 拉不开）。主题在页面顶部切换器可试四档，`?theme=dark` 之类可直接分享。
+- 题面给定数字 = 中性淡底上的墨色粗字，玩家填入 = 实心色块上的反白字，两套底色互差 ≥3:1（只改字色在数学上做不到一眼区分）。主题在页面顶部切换器可试四档，`?theme=dark` 之类可直接分享。
 - 存档与最佳用时落 `localStorage`（可注入自定义 `SaveStorage` 或 `null` 关闭）。
 
 ## 集成到你的项目
@@ -153,7 +153,7 @@ sudoku/
 │   ├── core/   @my-games/sudoku-core  纯 TS 引擎
 │   │   ├── src/{types,board,solver,generator,game,storage,themes,index}.ts
 │   │   ├── src/style.css                 单份视觉 + 主题契约层，Vue/React 共享
-│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  107 单测
+│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  114 单测
 │   ├── vue/    @my-games/sudoku-vue   GameSudoku.vue + useGame + instance
 │   └── react/  @my-games/sudoku-react GameSudoku.tsx + useGame
 ├── playground/ Vite 三 tab 演示（Vanilla / Vue / React）
@@ -195,12 +195,13 @@ tag↔版本一致）→ `pnpm -r publish --access public --provenance`（OIDC T
 - **CSS 单点**：样式只放 `core/src/style.css` 一份，vue/react `import` 后各自抽出 `dist/index.css`
   （内容一致）；消费者显式引 CSS。（合集模板缺陷②「单复数 / 源与产物不对称」在本仓库已统一为 `./style.css`。）
 - **主题是 CSS 变量，不是 JS 注入**：core 保持零 DOM，档位就是一个 `data-theme` 属性。代价是四档色板
-  在 CSS 里各写一份（约 30 个 `--sudoku-*` × 4 档），完整性、"布局层零硬编码色"、"给定数字双通道"
-  全部由 `test/theme.test.ts` 静态断言，不靠肉眼对齐；配色按 WCAG 2.1 逐对实测。
+  在 CSS 里各写一份（约 32 个 `--sudoku-*` × 4 档），完整性、"布局层零硬编码色"、"两类数字
+  的两套底色互差 ≥3:1"全部由 `test/theme.test.ts` 静态断言把关，不靠肉眼往返猜；配色另按
+  WCAG 2.1 逐对实测（脚本见该文件与合集根 `.theme-contrast.mjs`）。
 - **`auto` 归适配层**：放进 CSS 会把深色那叠变量抄第二遍（`dark` 与「auto 且系统为深」生效条件不同，
   规则体无法共享），所以组件用 `matchMedia` 解析。副作用是深色系统下首帧有一次浅→深闪变。
 - **冲突不拦填**：允许把冲突值填进去并标红 + 计错误，贴近真实数独 App（区别于「非法直接拒绝」）。
-- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 107 条用例；适配层靠 `typecheck + build` 覆盖，
+- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 114 条用例；适配层靠 `typecheck + build` 覆盖，
   是否补 `@vue/test-utils` / `@testing-library/react` 是独立的、需新增依赖的决策。
 - **计时非高精度**：`elapsedSeconds` 靠注入 `clock` 差值，标签页挂起不计；够休闲游戏用。
 
