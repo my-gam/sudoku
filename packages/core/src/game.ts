@@ -46,6 +46,11 @@ function emptyNotes(): NoteGrid {
   );
 }
 
+/** 盘面上是否还留着任意一条笔记（笔记只能由用户 toggleNote 产生，故等价于「已动手」）。 */
+function hasAnyNotes(notes: NoteGrid): boolean {
+  return notes.some((row) => row.some((cell) => cell.length > 0));
+}
+
 /** 由题面推导「给定掩码」。 */
 function maskFromPuzzle(puzzle: Grid): GivenMask {
   return puzzle.map((row) => row.map((v) => v !== 0));
@@ -66,6 +71,7 @@ function sortedUnique(digits: Digit[]): Digit[] {
  *   用作固定题/测试。`newGame()` 总是重新随机生成一道。
  * - 计时：注入 `clock`（默认 Date.now）；`elapsedMs = baseMs + (clock()-origin)`，
  *   通关瞬间冻结为 `finalMs`。undo 回未到通关的快照会按当时累计值续表。
+ *   起表时机 = 第一次真正改动局面的用户操作（填数 / 擦除 / 笔记 / 提示）；只选格浏览不起表。
  * - 存档：注入 storage（默认尝试 globalThis.localStorage）；`best` 是分难度最佳用时。
  */
 export class Sudoku {
@@ -93,7 +99,7 @@ export class Sudoku {
   private moveCount = 0;
   private history: Snapshot[] = [];
 
-  // 计时三段量：started=false 时 elapsedMs 恒 0，首次填充（input/hint）才起算。
+  // 计时三段量：started=false 时 elapsedMs 恒 0，首次改动局面（input/erase/toggleNote/hint）才起算。
   private started = false;
   private baseMs = 0;
   private origin = 0;
@@ -199,7 +205,7 @@ export class Sudoku {
     if (cellAt(this.grid, sel.row, sel.col) === digit) return false; // 同值，无变化
 
     this.pushHistory();
-    this.ensureStarted(); // 首次填充起表
+    this.ensureStarted(); // 改动局面即起表
     setCell(this.grid, sel.row, sel.col, digit);
     const notesRow = this.notes[sel.row];
     if (notesRow) notesRow[sel.col] = []; // 有值即清空该格笔记
@@ -222,9 +228,10 @@ export class Sudoku {
     if (!hadValue && !hadNotes) return false; // 本来就空，无变化
 
     this.pushHistory();
+    this.ensureStarted(); // 擦掉东西同样算开始作答
     setCell(this.grid, sel.row, sel.col, 0);
     if (notesRow) notesRow[sel.col] = [];
-    if (hadValue) this.moveCount++;
+    if (hadValue) this.moveCount++; // 擦掉一个「值」算一步；纯擦笔记不计步
     this.commit();
     return true;
   }
@@ -245,6 +252,7 @@ export class Sudoku {
     const current = notesRow[sel.col] ?? [];
     const has = current.includes(digit);
     this.pushHistory();
+    this.ensureStarted(); // 记笔记也算开始作答
     notesRow[sel.col] = has
       ? sortedUnique(current.filter((d) => d !== digit))
       : sortedUnique([...current, digit]);
@@ -344,7 +352,7 @@ export class Sudoku {
     this.clearSaved();
   }
 
-  /** 首次填充（input/hint）时懒起表；未起表前 elapsedMs 恒 0。 */
+  /** 首次改动局面（input/erase/toggleNote/hint）时懒起表；未起表前 elapsedMs 恒 0。 */
   private ensureStarted(): void {
     if (this.started) return;
     this.started = true;
@@ -434,8 +442,10 @@ export class Sudoku {
     this.history = [];
     this.selected = firstEmpty(this.grid);
     const elapsed = numberOr(save.elapsedMs, 0);
-    // 续档时按局面推定是否已起表：通关或已有操作/用时 → 已起表；否则等到首次填充才走。
-    this.started = this.status === 'won' || this.moveCount > 0 || elapsed > 0;
+    // 续档时按局面推定是否已起表：通关 / 已有步数 / 有用时 / 留有笔记 → 已起表；
+    // 否则（全新题面、只选中没动过）继续等到首次改动局面才走表。
+    const dirty = this.moveCount > 0 || elapsed > 0 || hasAnyNotes(this.notes);
+    this.started = this.status === 'won' || dirty;
     if (this.status === 'won') {
       this.finalMs = elapsed;
       this.baseMs = elapsed;

@@ -220,20 +220,62 @@ describe('Sudoku 通关与计时', () => {
     expect(g.input(1)).toBe(false);
   });
 
-  it('计时从首次填充起算（仅选中/记笔记不走表）', () => {
+  it('起表时机：只选格不计时，记笔记即算开始游戏', () => {
     let now = 0;
     const clock: Clock = () => now;
     const g = newGame({ clock });
     now = 5000;
-    g.select(0, 3); // 仅选中
-    g.toggleNote(1); // 仅笔记
-    expect(g.getState().elapsedSeconds).toBe(0); // 未填充 → 恒 0
-    now = 9000;
-    g.select(0, 2);
-    g.input(4); // 首次填充 → 此刻起表 = 0
+    g.select(0, 3); // 仅选中 → 不起表
     expect(g.getState().elapsedSeconds).toBe(0);
-    now = 11000;
-    expect(g.getState().elapsedSeconds).toBe(2); // 从 9000 起算
+    now = 7000;
+    expect(g.toggleNote(1)).toBe(true); // 笔记落了子 = 开始作答，此刻起表
+    expect(g.getState().notes[0]?.[3]).toEqual([1]); // 证明确实写进笔记，而非空跑 false
+    expect(g.getState().elapsedSeconds).toBe(0);
+    now = 10000;
+    expect(g.getState().elapsedSeconds).toBe(3); // 从 7000 起算
+  });
+
+  it('笔记起表后再填数，不会另起一张表', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const g = newGame({ clock });
+    now = 1000;
+    g.select(0, 3);
+    g.toggleNote(1); // 起表 origin=1000
+    now = 4000;
+    g.select(0, 2);
+    expect(g.input(4)).toBe(true);
+    now = 6000;
+    expect(g.getState().elapsedSeconds).toBe(5); // 仍从 1000 起算，没被填数重置
+  });
+
+  it('擦除（只擦掉笔记）后表不停', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const g = newGame({ clock });
+    now = 2000;
+    g.select(0, 3);
+    expect(g.toggleNote(1)).toBe(true); // 起表 origin=2000
+    now = 5000;
+    expect(g.erase()).toBe(true); // 该格只有笔记、无填值
+    expect(g.getState().moveCount).toBe(0); // 纯擦笔记不计步
+    now = 8000;
+    expect(g.getState().elapsedSeconds).toBe(6); // 2000 起算，中途没停
+  });
+
+  it('undo 回到首笔笔记之前 → 停表回 0:00', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const g = newGame({ clock });
+    now = 6000;
+    g.select(0, 3);
+    expect(g.toggleNote(1)).toBe(true); // 起表
+    now = 9000;
+    expect(g.getState().elapsedSeconds).toBe(3);
+    expect(g.undo()).toBe(true); // 回到笔记前（started 随快照复位）
+    expect(g.getState().elapsedSeconds).toBe(0);
+    now = 20000;
+    expect(g.getState().elapsedSeconds).toBe(0); // 已停表，仍 0
   });
 
   it('won 后用时冻结（从首次填充计到通关）', () => {
@@ -278,6 +320,21 @@ describe('Sudoku 存档与最佳持久化', () => {
     const g2 = newGame({ storage });
     expect(g2.getState().grid[0]?.[2]).toBe(4);
     expect(g2.getState().historySize).toBe(0); // undo 历史不跨会话
+  });
+
+  it('只有笔记且用时 0 的存档，续玩后仍算已开始（不再退回未起表）', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const storage = memStorage();
+    const g1 = newGame({ storage, freshStart: true, clock });
+    now = 1000;
+    g1.select(0, 3);
+    expect(g1.toggleNote(1)).toBe(true); // 起表同时落盘，此刻存档里的 elapsedMs 仍是 0
+    const g2 = newGame({ storage, clock }); // 同题面同难度 → 续档
+    expect(g2.getState().notes[0]?.[3]).toEqual([1]);
+    now = 5000;
+    // 若续档时只看 moveCount/elapsedMs 会误判为「没开始」，用时被清零。
+    expect(g2.getState().elapsedSeconds).toBe(4);
   });
 
   it('损坏存档被安全忽略并开新局', () => {

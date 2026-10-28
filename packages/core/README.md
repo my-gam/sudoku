@@ -51,8 +51,8 @@ unsub();
 - 9×9，3×3 宫；题面给定格不可改写。
 - `input` 填的值若与同行/列/宫重复 → 计入 `mistakeCount` 且该格进 `conflicts`，但仍允许填（不强制拦下）。
 - 全部 81 格填满且无冲突 → `status:'won'`，按难度写入 `bestSeconds`（更快才覆盖）。
-- 计时用注入的 `clock`（默认 `Date.now`）：**首次填充（`input`/`hint`）才起表**，仅选中/记笔记不计时；
-  `elapsedSeconds` 在 `won` 时定格。
+- 计时用注入的 `clock`（默认 `Date.now`）：**第一次改动局面（`input` / `erase` / `toggleNote` / `hint`）才起表**，
+  只选格浏览不计时；`elapsedSeconds` 在 `won` 时定格。
 - 存档（含题面、解、当前盘、笔记、计数、用时）落 `saveKey`；`best`（分难度）落 `bestKey`；
   同难度同题面才续档，损坏 JSON / 版本不符自动开新局。
 
