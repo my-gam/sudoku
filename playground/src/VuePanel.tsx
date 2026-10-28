@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { createApp, h, ref } from 'vue';
+import { createApp, h, ref, type Ref } from 'vue';
 import { GameSudoku as GameSudokuVue } from '@my-games/sudoku-vue';
 import type { Difficulty, Digit, SudokuTheme } from '@my-games/sudoku-core';
 
@@ -25,12 +25,22 @@ export function VuePanel(props: VuePanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const cbRef = useRef(props);
   cbRef.current = props;
-  const themeRef = ref<SudokuTheme | undefined>(props.theme);
   const { saveKey, bestKey, difficulty, autofocus, showHint } = props;
+
+  // Vue 的 ref 必须「每个 React 实例只建一次」。踩过的坑：直接在组件函数体里 ref()，
+  // 每次 React 重渲染都会产出一个新的 ref 对象 —— 挂载 effect 的渲染闭包追踪的是第一次
+  // 那个，下面的同步 effect 写的却是最新那个，两边不是同一对象，Vue 永不重渲染，
+  // 表现就是「切主题没反应」。所以用 useRef 把 Vue ref 本身钉住。
+  const themeHolder = useRef<Ref<SudokuTheme | undefined> | null>(null);
+  let themeRef = themeHolder.current;
+  if (!themeRef) {
+    themeRef = ref<SudokuTheme | undefined>(props.theme);
+    themeHolder.current = themeRef;
+  }
 
   useEffect(() => {
     themeRef.value = props.theme;
-  }, [props.theme]);
+  }, [props.theme, themeRef]);
 
   useEffect(() => {
     const el = hostRef.current;
