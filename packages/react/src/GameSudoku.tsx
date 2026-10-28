@@ -10,7 +10,8 @@ import {
   useState
 } from 'react';
 import '@my-games/sudoku-core/style.css';
-import type { Difficulty, Digit, GameState, SaveStorage } from '@my-games/sudoku-core';
+import { DEFAULT_THEME, resolveTheme } from '@my-games/sudoku-core';
+import type { Difficulty, Digit, GameState, SaveStorage, SudokuTheme } from '@my-games/sudoku-core';
 import { useGame } from './useGame';
 
 /**
@@ -30,6 +31,8 @@ export interface GameSudokuProps {
   title?: string;
   className?: string;
   showHint?: boolean;
+  /** 主题档；`auto` 由本组件用 matchMedia 解析成 light / dark。默认 light，不静默跟随系统。 */
+  theme?: SudokuTheme;
   onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (payload: { difficulty: Difficulty; seconds: number }) => void;
 }
@@ -114,6 +117,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     title = '数独',
     className,
     showHint = false,
+    theme = DEFAULT_THEME,
     onDigit,
     onSolved
   } = props;
@@ -128,6 +132,19 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [noteMode, setNoteMode] = useState(false);
+  // 系统深浅偏好。只有 theme='auto' 会消费它，但监听从挂载就一直开着——用户中途翻系统
+  // 深色时不需要重挂组件就能换档。首帧恒为 false，与 Vue 版及 SSR 输出保持一致。
+  const [prefersDark, setPrefersDark] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    setPrefersDark(query.matches);
+    const onChange = (ev: MediaQueryListEvent): void => setPrefersDark(ev.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  /** 写进根元素 data-theme 的最终档位：auto 已解析成 light / dark。 */
+  const resolvedTheme = resolveTheme(theme, prefersDark);
   // 用时每秒刷新：core 只在操作时推快照，tick 触发重绘后由 game.getState() 读实时值。
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -239,7 +256,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
   };
 
   return (
-    <div className={['game-sudoku', className].filter(Boolean).join(' ')}>
+    <div className={['game-sudoku', className].filter(Boolean).join(' ')} data-theme={resolvedTheme}>
       <header className="game-sudoku-header">
         <h1 className="game-sudoku-title">
           {title}

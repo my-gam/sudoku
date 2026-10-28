@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import '@my-games/sudoku-core/style.css';
+import { DEFAULT_THEME, resolveTheme } from '@my-games/sudoku-core';
 import { useGame } from './useGame';
-import type { Digit, Difficulty, SaveStorage } from '@my-games/sudoku-core';
+import type { Digit, Difficulty, SaveStorage, SudokuTheme } from '@my-games/sudoku-core';
 
 /**
  * GameSudoku —— Vue 3 官方组件，桥接 @my-games/sudoku-core 引擎。
@@ -11,6 +12,8 @@ import type { Digit, Difficulty, SaveStorage } from '@my-games/sudoku-core';
  * - 点击格子选中；数字面板 / 键盘 1-9 填数；N 切笔记模式；Backspace/Delete 擦除；方向键移动选中。
  * - 键盘走 window keydown，但严格判 `document.activeElement === boardEl`，多实例并存只活动那个响应。
  * - 视觉/类名全部复用 core 的 style.css，与 React 版行为对齐。
+ * - 主题：`theme` 决定根元素 `data-theme`。core 的 CSS 只承载 4 个具体预设，`auto`
+ *   在这里用 matchMedia 解析成 light / dark 后写入，并监听系统偏好变化实时切换。
  */
 
 interface Props {
@@ -23,6 +26,7 @@ interface Props {
   title?: string;
   showPad?: boolean;
   showHint?: boolean;
+  theme?: SudokuTheme;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -34,7 +38,8 @@ const props = withDefaults(defineProps<Props>(), {
   autofocus: true,
   title: '数独',
   showPad: true,
-  showHint: false
+  showHint: false,
+  theme: DEFAULT_THEME
 });
 
 const emit = defineEmits<{
@@ -52,6 +57,15 @@ const { state, raw, select, input, erase, toggleNote, hint, newGame, undo } = us
 
 const boardEl = ref<HTMLDivElement | null>(null);
 const noteMode = ref(false);
+// 系统深浅偏好。只有 theme='auto' 会消费它，但监听从挂载就一直开着——用户中途翻
+// 系统深色时不需要重挂组件就能换档。
+const prefersDark = ref(false);
+let schemeQuery: MediaQueryList | null = null;
+function onSchemeChange(ev: MediaQueryListEvent): void {
+  prefersDark.value = ev.matches;
+}
+/** 写进根元素 data-theme 的最终档位：auto 已解析成 light / dark。 */
+const resolvedTheme = computed(() => resolveTheme(props.theme, prefersDark.value));
 // 用时每秒刷新：core 只在操作时推快照，这里用 tick 触发对 raw.getState() 的实时重读。
 const tick = ref(0);
 let timerId: number | undefined;
@@ -208,10 +222,17 @@ watch(
 onMounted(() => {
   if (props.autofocus) boardEl.value?.focus({ preventScroll: true });
   window.addEventListener('keydown', onKey, { passive: false });
+  if (typeof window.matchMedia === 'function') {
+    schemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    prefersDark.value = schemeQuery.matches;
+    schemeQuery.addEventListener('change', onSchemeChange);
+  }
   startTimer();
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey);
+  schemeQuery?.removeEventListener('change', onSchemeChange);
+  schemeQuery = null;
   stopTimer();
 });
 
@@ -219,7 +240,7 @@ defineExpose({ select, input, erase, toggleNote, hint, newGame, undo });
 </script>
 
 <template>
-  <div class="game-sudoku">
+  <div class="game-sudoku" :data-theme="resolvedTheme">
     <header class="game-sudoku-header">
       <h1 class="game-sudoku-title">
         {{ title }}
