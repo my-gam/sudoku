@@ -31,7 +31,10 @@ export function useGame(options: GameOptions = {}): UseGameReturn {
   const { difficulty, storage, saveKey, bestKey, freshStart, puzzle } = options;
 
   const game = useMemo(
-    () => new Sudoku({ difficulty, storage, saveKey, bestKey, freshStart, puzzle }),
+    // theme / themeKey 只作「构造期初值」，刻意不进依赖数组：换主题应当走
+    // game.setTheme()（组件里已接好），若把它列入依赖，切一次主题就会重建引擎、
+    // 连带丢掉本局 undo 历史。
+    () => new Sudoku({ difficulty, storage, saveKey, bestKey, freshStart, puzzle, theme: options.theme, themeKey: options.themeKey }),
     // 故意只依赖这些稳定原始值；storage / puzzle / rng / clock 引用不稳定，重开一次即可。
     [difficulty, saveKey, bestKey]
   );
