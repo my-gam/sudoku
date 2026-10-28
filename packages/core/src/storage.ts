@@ -1,17 +1,23 @@
+import { isTheme } from './themes';
+import type { SudokuTheme } from './themes';
 import type { BestTimes, Difficulty, SaveStorage, SerializedSave } from './types';
 
 /**
- * 存档与最佳用时持久化。
+ * 存档、最佳用时与主题偏好持久化。
  *
  * 版本策略：读到的 version ≠ SAVE_VERSION 时，`isSerializedSave` 守卫失败 →
  * 上层丢弃并开新局。目前仅 v1。
  *
  * best 存的是 `BestTimes`（每个难度历史最佳用时秒数，null = 未通关），
  * 以 JSON 落在单个 bestKey 下，读回时补全缺失难度为 null。
+ *
+ * theme 与 best 同级、**不进对局存档**：主题是用户偏好，换难度 / 开新局都该保留，
+ * 而且塞进 SerializedSave 会牵动版本守卫与 migrate()。单键存 JSON 字符串。
  */
 export const SAVE_VERSION = 1 as const;
 export const DEFAULT_SAVE_KEY = 'game-sudoku:save';
 export const DEFAULT_BEST_KEY = 'game-sudoku:best';
+export const DEFAULT_THEME_KEY = 'game-sudoku:theme';
 
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 
@@ -102,6 +108,41 @@ export function writeBest(storage: SaveStorage | null, key: string, best: BestTi
   if (!storage) return;
   try {
     storage.setItem(key, JSON.stringify(best));
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * 读回主题偏好。存的是 JSON 字符串（如 `"dark"`）；缺失、JSON 损坏、或值不在登记表里
+ * 都返回 null，由上层决定回落（`Sudoku` 回落 DEFAULT_THEME）。返回 null 而不是默认值，
+ * 是为了让上层能区分「用户没存过」与「用户存的就是 light」。
+ */
+export function loadTheme(storage: SaveStorage | null, key: string): SudokuTheme | null {
+  if (!storage) return null;
+  const raw = storage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isTheme(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeTheme(storage: SaveStorage | null, key: string, theme: SudokuTheme): void {
+  if (!storage) return;
+  try {
+    storage.setItem(key, JSON.stringify(theme));
+  } catch {
+    /* quota / 隐私模式静默忽略；主题写不进不该影响游戏 */
+  }
+}
+
+export function clearTheme(storage: SaveStorage | null, key: string): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(key);
   } catch {
     /* ignore */
   }

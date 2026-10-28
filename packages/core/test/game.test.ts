@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sudoku } from '../src/game';
+import { DEFAULT_THEME_KEY, writeTheme } from '../src/storage';
+import type { SudokuTheme } from '../src/themes';
 import type { Cell, Clock, Digit, Grid, SaveStorage } from '../src/types';
 
 /** 经典唯一题面 + 其已知解（避免测试期随机生成，solution 直接注入）。 */
@@ -308,6 +310,110 @@ describe('Sudoku 通关与计时', () => {
     expect(s.grid[0]?.[2]).toBe(0);
     now = 20000;
     expect(g.getState().elapsedSeconds).toBe(0); // 已停表，仍 0
+  });
+});
+
+describe('Sudoku 主题偏好（引擎持有，不是组件属性）', () => {
+  it('无 storage 无 opts 时回落 light，且不抛错', () => {
+    const g = newGame();
+    expect(g.getState().theme).toBe('light');
+    expect(g.getTheme()).toBe('light');
+  });
+
+  it('构造传入 theme 会写进独立的 themeKey，二次构造可恢复', () => {
+    const storage = memStorage();
+    const g1 = newGame({ storage, freshStart: true, theme: 'dark' });
+    expect(g1.getTheme()).toBe('dark');
+    expect(JSON.parse(storage.dump()[DEFAULT_THEME_KEY] ?? 'null')).toBe('dark');
+    // 对局存档里不该出现 theme —— 它是偏好，不是局状态。
+    const rawSave = JSON.parse(storage.dump()['game-sudoku:save'] ?? 'null');
+    expect('theme' in (rawSave ?? {})).toBe(false);
+    const g2 = newGame({ storage });
+    expect(g2.getTheme()).toBe('dark');
+  });
+
+  it('显式传入优先于已持久化的值，并回写覆盖', () => {
+    const storage = memStorage();
+    writeTheme(storage, DEFAULT_THEME_KEY, 'sepia');
+    const g = newGame({ storage, theme: 'high-contrast' });
+    expect(g.getTheme()).toBe('high-contrast');
+    expect(JSON.parse(storage.dump()[DEFAULT_THEME_KEY] ?? 'null')).toBe('high-contrast');
+  });
+
+  it('没传 theme 时读持久化值；持久化值是垃圾则回落 light 且不炸', () => {
+    const storage = memStorage();
+    storage.setItem(DEFAULT_THEME_KEY, '"neon"');
+    expect(newGame({ storage }).getTheme()).toBe('light');
+    storage.setItem(DEFAULT_THEME_KEY, '{ broken');
+    expect(newGame({ storage }).getTheme()).toBe('light');
+  });
+
+  it('setTheme 更新状态 + 落盘 + 通知订阅者', () => {
+    const storage = memStorage();
+    const g = newGame({ storage, freshStart: true });
+    const seen: SudokuTheme[] = [];
+    g.subscribe((s) => seen.push(s.theme));
+    expect(seen).toEqual(['light']); // 注册即收一次
+    expect(g.setTheme('dark')).toBe(true);
+    expect(seen).toEqual(['light', 'dark']); // 第二次来自 setTheme 的通知
+    expect(JSON.parse(storage.dump()[DEFAULT_THEME_KEY] ?? 'null')).toBe('dark');
+  });
+
+  it('非法档位被拒（不通知、不落盘、状态不动）', () => {
+    const storage = memStorage();
+    const g = newGame({ storage, freshStart: true });
+    let notifications = 0;
+    g.subscribe(() => {
+      notifications++;
+    });
+    expect(notifications).toBe(1);
+    expect(g.setTheme('neon' as SudokuTheme)).toBe(false);
+    expect(notifications).toBe(1);
+    expect(g.getTheme()).toBe('light');
+    expect(storage.dump()[DEFAULT_THEME_KEY]).toBeUndefined();
+  });
+
+  it('同值幂等：返回 true 但不重复写盘通知', () => {
+    const g = newGame({ freshStart: true });
+    g.setTheme('sepia');
+    let notifications = 0;
+    g.subscribe(() => {
+      notifications++;
+    });
+    expect(notifications).toBe(1);
+    expect(g.setTheme('sepia')).toBe(true);
+    expect(notifications).toBe(1);
+  });
+
+  it('主题不进 undo 历史，也不随 newGame / 切难度丢失', () => {
+    const g = newGame({ freshStart: true });
+    g.select(0, 2);
+    g.input(4);
+    g.setTheme('dark');
+    expect(g.undo()).toBe(true);
+    expect(g.getTheme()).toBe('dark'); // 撤销一步不该把配色撤回去
+    g.newGame('hard');
+    expect(g.getTheme()).toBe('dark');
+  });
+
+  it('clearSaved 只动对局存档，主题偏好保留', () => {
+    const storage = memStorage();
+    const g = newGame({ storage, freshStart: true, theme: 'sepia' });
+    g.select(0, 2);
+    g.input(4);
+    g.clearSaved();
+    expect(storage.dump()['game-sudoku:save']).toBeUndefined();
+    expect(storage.dump()[DEFAULT_THEME_KEY]).toBeDefined();
+    expect(newGame({ storage }).getTheme()).toBe('sepia');
+  });
+
+  it('getEffectiveTheme 只做纯解析，core 不碰 DOM', () => {
+    const g = newGame({ freshStart: true, theme: 'auto' });
+    expect(g.getEffectiveTheme(false)).toBe('light');
+    expect(g.getEffectiveTheme(true)).toBe('dark');
+    expect(g.getEffectiveTheme()).toBe('light'); // 不传参按浅色
+    g.setTheme('high-contrast');
+    expect(g.getEffectiveTheme(true)).toBe('high-contrast'); // 具体档不受系统影响
   });
 });
 

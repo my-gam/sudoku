@@ -8,6 +8,9 @@
  * - `Sudoku` 类持有「当前这局」的完整可序列化快照 `GameState`，供订阅者渲染。
  */
 
+// 主题档位与联合类型由 themes.ts 持有（该文件不反向依赖本文件，无循环）。
+import type { SudokuTheme } from './themes';
+
 /** 一个可填入的数独数字。 */
 export type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -63,6 +66,11 @@ export interface GameState {
   moveCount: number;
   /** 可撤销栈深度；>0 时 UI 可点亮「撤销」。 */
   historySize: number;
+  /**
+   * 主题档位（用户请求值，可能是 'auto'）。属于偏好而非局状态：不进存档、不进
+   * undo 历史，单独落在 themeKey。渲染成什么颜色由消费方解析（见 resolveTheme）。
+   */
+  theme: SudokuTheme;
 }
 
 /** 一局的可回退快照（不含派生态与计时，undo 时整体还原）。 */
@@ -125,6 +133,13 @@ export interface GameOptions {
   storage?: SaveStorage | null;
   saveKey?: string;
   bestKey?: string;
+  /**
+   * 初始主题。优先级：本参数 > themeKey 里已持久化的值 > DEFAULT_THEME。
+   * 传非法值不会抛错，由 normalizeTheme 归一后落盘。
+   */
+  theme?: SudokuTheme;
+  /** 主题偏好的存储键，默认 `game-sudoku:theme`（与对局存档分家）。 */
+  themeKey?: string;
   /** 构造时忽略已有存档，直接开新局。 */
   freshStart?: boolean;
   /** 固定题面（含 0 空格）：给定时用它而非现场生成（固定题 / 测试场景）。 */

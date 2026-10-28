@@ -4,13 +4,18 @@ import { solve } from './solver';
 import {
   DEFAULT_BEST_KEY,
   DEFAULT_SAVE_KEY,
+  DEFAULT_THEME_KEY,
   clearSave,
   loadBest,
   loadSave,
+  loadTheme,
   tryGetGlobalStorage,
   writeBest,
-  writeSave
+  writeSave,
+  writeTheme
 } from './storage';
+import { DEFAULT_THEME, isTheme, normalizeTheme, resolveTheme } from './themes';
+import type { SudokuDataTheme, SudokuTheme } from './themes';
 import type {
   BestTimes,
   Difficulty,
@@ -73,6 +78,9 @@ function sortedUnique(digits: Digit[]): Digit[] {
  *   通关瞬间冻结为 `finalMs`。undo 回未到通关的快照会按当时累计值续表。
  *   起表时机 = 第一次真正改动局面的用户操作（填数 / 擦除 / 笔记 / 提示）；只选格浏览不起表。
  * - 存档：注入 storage（默认尝试 globalThis.localStorage）；`best` 是分难度最佳用时。
+ * - 主题：也是引擎状态的一部分（`getTheme` / `setTheme`），随 `GameState.theme` 推给订阅者，
+ *   落在独立的 `themeKey`（不占对局存档、不进 undo 历史）。core 不碰 DOM，`auto` 由宿主把
+ *   `matchMedia` 的结果喂给 `getEffectiveTheme(prefersDark)` 这一纯解析。
  */
 export class Sudoku {
   private readonly rng: RandomSource;
@@ -80,6 +88,7 @@ export class Sudoku {
   private readonly storage: SaveStorage | null;
   private readonly saveKey: string;
   private readonly bestKey: string;
+  private readonly themeKey: string;
   private readonly undoLimit: number;
   private readonly fixedPuzzle: Grid | null;
   private readonly fixedSolution: Grid | null;
@@ -106,6 +115,8 @@ export class Sudoku {
   private finalMs = 0;
 
   private best: BestTimes;
+  // 主题偏好：局外状态，不进存档也不进 undo 历史，单独落在 themeKey。
+  private theme: SudokuTheme;
 
   private listeners = new Set<(state: GameState) => void>();
   private notifying = false;
@@ -117,8 +128,17 @@ export class Sudoku {
     this.saveKey = opts.saveKey ?? DEFAULT_SAVE_KEY;
     this.bestKey = opts.bestKey ?? DEFAULT_BEST_KEY;
     this.undoLimit = opts.undoLimit ?? DEFAULT_UNDO_LIMIT;
+    this.themeKey = opts.themeKey ?? DEFAULT_THEME_KEY;
     this.difficulty = opts.difficulty ?? DEFAULT_DIFFICULTY;
     this.best = loadBest(this.storage, this.bestKey);
+
+    // 主题优先级：显式传入 > themeKey 里已存的 > DEFAULT_THEME。
+    // 传入值视作不可信入参（JS 宿主可能给任意字符串），先归一再回写，别把非法值存回去。
+    const persistedTheme = loadTheme(this.storage, this.themeKey);
+    this.theme = opts.theme === undefined ? (persistedTheme ?? DEFAULT_THEME) : normalizeTheme(opts.theme);
+    if (opts.theme !== undefined && this.theme !== persistedTheme) {
+      writeTheme(this.storage, this.themeKey, this.theme);
+    }
 
     this.fixedPuzzle = opts.puzzle ? cloneGrid(opts.puzzle) : null;
     this.fixedSolution = opts.solution ? cloneGrid(opts.solution) : null;
@@ -165,7 +185,8 @@ export class Sudoku {
       hintCount: this.hintCount,
       mistakeCount: this.mistakeCount,
       moveCount: this.moveCount,
-      historySize: this.history.length
+      historySize: this.history.length,
+      theme: this.theme
     };
   }
 
@@ -179,6 +200,34 @@ export class Sudoku {
 
   getSolution(): Grid {
     return cloneGrid(this.solution);
+  }
+
+  /** 当前主题档位（用户请求值，可能是 `'auto'`）。 */
+  getTheme(): SudokuTheme {
+    return this.theme;
+  }
+
+  /**
+   * 把请求档解析成具体档。core 不碰 DOM，所以 `prefersDark` 由宿主从
+   * `matchMedia('(prefers-color-scheme: dark)')` 取值喂进来；不传按浅色处理。
+   */
+  getEffectiveTheme(prefersDark = false): SudokuDataTheme {
+    return resolveTheme(this.theme, prefersDark);
+  }
+
+  /**
+   * 切换主题并落到 `themeKey`。返回 `false` = 值不在登记表里（状态不动、不通知）。
+   *
+   * 刻意不走 `commit()`：主题是**偏好**不是局状态——既不该写进对局存档（换难度、开新局
+   * 都要保留它），也不该进 undo 历史（撤销一步不应该把配色撤回去）。
+   */
+  setTheme(next: SudokuTheme): boolean {
+    if (!isTheme(next)) return false;
+    if (next === this.theme) return true;
+    this.theme = next;
+    writeTheme(this.storage, this.themeKey, next);
+    this.notify();
+    return true;
   }
 
   canUndo(): boolean {

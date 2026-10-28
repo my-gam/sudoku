@@ -52,15 +52,19 @@ export {
 export {
   DEFAULT_BEST_KEY,
   DEFAULT_SAVE_KEY,
+  DEFAULT_THEME_KEY,
   SAVE_VERSION,
   clearSave,
+  clearTheme,
   emptyBestTimes,
   isSerializedSave,
   loadBest,
   loadSave,
+  loadTheme,
   tryGetGlobalStorage,
   writeBest,
-  writeSave
+  writeSave,
+  writeTheme
 } from './storage';
 
 export type {

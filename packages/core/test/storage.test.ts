@@ -2,16 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BEST_KEY,
   DEFAULT_SAVE_KEY,
+  DEFAULT_THEME_KEY,
   SAVE_VERSION,
   clearSave,
+  clearTheme,
   emptyBestTimes,
   isSerializedSave,
   loadBest,
   loadSave,
+  loadTheme,
   tryGetGlobalStorage,
   writeBest,
-  writeSave
+  writeSave,
+  writeTheme
 } from '../src/storage';
+import { SUDOKU_THEMES } from '../src/themes';
 import type { BestTimes, Cell, Grid, SaveStorage, SerializedSave } from '../src/types';
 
 function memStorage(): SaveStorage & { dump(): Record<string, string> } {
@@ -134,5 +139,43 @@ describe('最佳用时 BestTimes', () => {
 describe('tryGetGlobalStorage', () => {
   it('Node 环境无 localStorage → null', () => {
     expect(tryGetGlobalStorage()).toBe(null);
+  });
+});
+
+describe('主题偏好持久化（与对局存档分家）', () => {
+  it('键名遵循合集约定 game-sudoku:theme，且与存档 / best 分家', () => {
+    expect(DEFAULT_THEME_KEY).toBe('game-sudoku:theme');
+    expect(DEFAULT_THEME_KEY).not.toBe(DEFAULT_SAVE_KEY);
+    expect(DEFAULT_THEME_KEY).not.toBe(DEFAULT_BEST_KEY);
+  });
+
+  it('每一档都能原样往返（含 auto）', () => {
+    const s = memStorage();
+    for (const theme of SUDOKU_THEMES) {
+      writeTheme(s, DEFAULT_THEME_KEY, theme);
+      expect(loadTheme(s, DEFAULT_THEME_KEY)).toBe(theme);
+    }
+  });
+
+  it('没存过时返回 null，而不是默认档 —— 上层要能区分「没存过」', () => {
+    expect(loadTheme(memStorage(), DEFAULT_THEME_KEY)).toBe(null);
+  });
+
+  it('登记表外的值、损坏 JSON、非字符串 JSON 都回落 null', () => {
+    const s = memStorage();
+    for (const bad of ['"neon"', '{ broken', '42', 'null', '{"a":1}', 'dark']) {
+      s.setItem(DEFAULT_THEME_KEY, bad);
+      expect(loadTheme(s, DEFAULT_THEME_KEY), `输入 ${bad} 不该被接受`).toBe(null);
+    }
+  });
+
+  it('storage 为 null 时读写都不抛错；clearTheme 移除键', () => {
+    expect(loadTheme(null, DEFAULT_THEME_KEY)).toBe(null);
+    expect(() => writeTheme(null, DEFAULT_THEME_KEY, 'dark')).not.toThrow();
+    const s = memStorage();
+    writeTheme(s, DEFAULT_THEME_KEY, 'sepia');
+    clearTheme(s, DEFAULT_THEME_KEY);
+    expect(s.dump()[DEFAULT_THEME_KEY]).toBeUndefined();
+    expect(loadTheme(s, DEFAULT_THEME_KEY)).toBe(null);
   });
 });
