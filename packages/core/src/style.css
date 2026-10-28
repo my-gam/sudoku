@@ -525,10 +525,6 @@
   color: var(--bad-text);
 }
 
-.game-sudoku-cell.is-hint {
-  color: var(--accent-dark);
-}
-
 .cell-notes {
   position: absolute;
   inset: 2px;
