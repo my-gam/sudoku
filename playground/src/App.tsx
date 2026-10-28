@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameSudoku as GameSudokuReact } from '@my-games/sudoku-react';
-import type { Digit } from '@my-games/sudoku-core';
+import { normalizeTheme, resolveTheme } from '@my-games/sudoku-core';
+import type { Digit, SudokuTheme } from '@my-games/sudoku-core';
 import { VuePanel } from './VuePanel';
 import { VanillaDemo } from './VanillaDemo';
 
@@ -8,7 +9,8 @@ import { VanillaDemo } from './VanillaDemo';
  * Playground —— 三 tab 共享同一份 @my-games/sudoku-core 引擎与样式：
  * Vanilla（直吃 core，手工 DOM）/ Vue 3 / React 18/19。
  * 每个 tab 各有一份独立事件日志（跟随当前 tab），填数记录"格坐标 ← 数字"。
- * URL：?demo=vanilla|vue|react；?hint=1 显示提示按钮（默认 hint 只作 API）。
+ * 主题切换器对三个 tab 同时生效，走 core 的 --sudoku-* 契约层；页面外壳另用一套 pg-* 色。
+ * URL：?demo=vanilla|vue|react；?theme=light|dark|high-contrast|sepia|auto；?hint=1 显示提示按钮。
  */
 type Demo = 'vanilla' | 'vue' | 'react';
 type LogEntry = { id: number; kind: 'fill' | 'solved'; text: string };
@@ -19,12 +21,26 @@ const TABS: Array<{ key: Demo; label: string }> = [
   { key: 'react', label: 'React' }
 ];
 
+const THEMES: Array<{ key: SudokuTheme; label: string }> = [
+  { key: 'light', label: '浅色' },
+  { key: 'dark', label: '深色' },
+  { key: 'high-contrast', label: '高对比' },
+  { key: 'sepia', label: '纸质' },
+  { key: 'auto', label: '跟随系统' }
+];
+
 const EMPTY_LOGS: Record<Demo, LogEntry[]> = { vanilla: [], vue: [], react: [] };
 
 function initialDemo(): Demo {
   if (typeof window === 'undefined') return 'vanilla';
   const raw = new URLSearchParams(window.location.search).get('demo');
   return raw === 'vue' || raw === 'react' ? raw : 'vanilla';
+}
+
+/** URL 里的 ?theme= 是不可信输入，交给 core 的 normalizeTheme 归一，非法值退回 light。 */
+function initialTheme(): SudokuTheme {
+  if (typeof window === 'undefined') return 'light';
+  return normalizeTheme(new URLSearchParams(window.location.search).get('theme'));
 }
 
 function formatFill(e: { digit: Digit; changed: boolean; row: number; col: number }): string {
@@ -34,18 +50,38 @@ function formatFill(e: { digit: Digit; changed: boolean; row: number; col: numbe
 
 export function App() {
   const [demo, setDemo] = useState<Demo>(initialDemo);
+  const [theme, setTheme] = useState<SudokuTheme>(initialTheme);
   const [hintOn] = useState(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('hint') === '1'
   );
   const [logs, setLogs] = useState<Record<Demo, LogEntry[]>>(EMPTY_LOGS);
   const idRef = useRef(0);
 
+  // 页面外壳要跟着换色，所以这里也得把 auto 解析成具体档（组件内部各自还会再解析一次）。
+  const [prefersDark, setPrefersDark] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    setPrefersDark(query.matches);
+    const onChange = (ev: MediaQueryListEvent): void => setPrefersDark(ev.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  const resolvedTheme = resolveTheme(theme, prefersDark);
+
+  // 页面外壳的配色挂在 <html> 上（挂在 .pg-shell 上的话，body 读不到变量，
+  // 桌面端 460px 栏目外侧会露出一圈白底）。用 data-pg-theme 与组件的 data-theme 区分开。
+  useEffect(() => {
+    document.documentElement.dataset.pgTheme = resolvedTheme;
+  }, [resolvedTheme]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     url.searchParams.set('demo', demo);
+    url.searchParams.set('theme', theme);
     window.history.replaceState({}, '', url.toString());
-  }, [demo]);
+  }, [demo, theme]);
 
   const addLog = useCallback((target: Demo, entry: Omit<LogEntry, 'id'>) => {
     idRef.current += 1;
@@ -96,6 +132,23 @@ export function App() {
         ))}
       </nav>
 
+      <nav className="pg-themes" role="group" aria-label="主题">
+        {THEMES.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            aria-pressed={theme === t.key}
+            className={`pg-theme-btn${theme === t.key ? ' is-active' : ''}`}
+            onClick={() => setTheme(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+        <span className="pg-theme-now">
+          <code>data-theme={resolvedTheme}</code>
+        </span>
+      </nav>
+
       <section className="pg-stage" role="tabpanel">
         {demo === 'vanilla' && (
           <>
@@ -108,6 +161,7 @@ export function App() {
               bestKey="sudoku-vanilla:best"
               autofocus
               showHint={hintOn}
+              theme={theme}
               onDigit={handlers.vanilla.onDigit}
               onSolved={handlers.vanilla.onSolved}
             />
@@ -125,6 +179,7 @@ export function App() {
               bestKey="sudoku-vue:best"
               autofocus
               showHint={hintOn}
+              theme={theme}
               onDigit={handlers.vue.onDigit}
               onSolved={handlers.vue.onSolved}
             />
@@ -142,6 +197,7 @@ export function App() {
               bestKey="sudoku-react:best"
               autofocus
               showHint={hintOn}
+              theme={theme}
               onDigit={handlers.react.onDigit}
               onSolved={handlers.react.onSolved}
             />
@@ -157,7 +213,9 @@ export function App() {
           有各自独立的事件日志（切换 tab 即切换日志），填数记录形如 <code>(行,列) ← 数字</code>（1 起算，
           无效填数标注"无效"）。三 tab 各自独立 localStorage 键（<code>sudoku-&lt;tab&gt;:save</code> /
           <code>:best</code>），切换不打断对局。键盘：1-9 填数、N 笔记、Backspace 擦除、方向键移动选中。
-          「提示」默认不常驻，只作 API；加 <code>?hint=1</code> 显示按钮。
+          「提示」默认不常驻，只作 API；加 <code>?hint=1</code> 显示按钮。主题由上方切换器写进组件根元素的
+          <code>data-theme</code>，走 core 的 <code>--sudoku-*</code> 契约层；「跟随系统」= <code>auto</code>，
+          由 <code>matchMedia</code> 解析成具体档（右侧会显示当前真正生效的值）。
         </p>
       </details>
 

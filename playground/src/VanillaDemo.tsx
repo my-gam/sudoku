@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { Sudoku, type Cell, type Difficulty, type Digit, type GameState } from '@my-games/sudoku-core';
+import {
+  Sudoku,
+  resolveTheme,
+  type Cell,
+  type Difficulty,
+  type Digit,
+  type GameState,
+  type SudokuTheme
+} from '@my-games/sudoku-core';
 
 /**
  * VanillaDemo —— 不依赖任何适配器，直接吃 `@my-games/sudoku-core`。
@@ -7,6 +15,8 @@ import { Sudoku, type Cell, type Difficulty, type Digit, type GameState } from '
  * 棋盘 DOM 由 useEffect 里 `document.createElement` 手工构建 + 订阅回调全量重绘；
  * 等价于浏览器 `<script src="...index.iife.js">` + `const { Sudoku } = SudokuCore` 的写法。
  * 复用 core/src/style.css 的 `.game-sudoku-*` 类，视觉与 vue/react 一致。
+ * 主题：宿主自己往根元素写 `data-theme`（vue/react 里这一步在组件内部）——
+ * 这正是 CSS 契约层设计成零特异性、纯属性的原因：不依赖任何框架也能换肤。
  */
 export interface VanillaDemoProps {
   saveKey: string;
@@ -14,6 +24,7 @@ export interface VanillaDemoProps {
   difficulty?: Difficulty;
   autofocus?: boolean;
   showHint?: boolean;
+  theme?: SudokuTheme;
   onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (e: { difficulty: Difficulty; seconds: number }) => void;
 }
@@ -37,6 +48,7 @@ export function VanillaDemo({
   difficulty = 'easy',
   autofocus = true,
   showHint = false,
+  theme = 'light',
   onDigit,
   onSolved
 }: VanillaDemoProps) {
@@ -44,6 +56,23 @@ export function VanillaDemo({
   // 用 ref 持有最新回调：DOM 构建的 effect 依赖只放引擎参数，不因父级回调换引用而重建棋盘。
   const cb = useRef({ onDigit, onSolved });
   cb.current = { onDigit, onSolved };
+
+  // 主题只写 data-theme，不参与棋盘 DOM 重建；auto 解析成 light / dark 并跟随系统变化。
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      host.dataset.theme = resolveTheme(theme, false);
+      return;
+    }
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = (): void => {
+      host.dataset.theme = resolveTheme(theme, query.matches);
+    };
+    apply();
+    query.addEventListener('change', apply);
+    return () => query.removeEventListener('change', apply);
+  }, [theme]);
 
   useEffect(() => {
     const host = hostRef.current;
