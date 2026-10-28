@@ -15,10 +15,12 @@ Refs #
 
 ## 门禁证据 · Gate evidence
 
-本地必须三 gate 全绿，把最后一段输出贴过来：
+本地必须全部门禁绿，把最后一段输出贴过来（根脚本 filter 只覆盖 `packages/**`，
+playground 两条要单独跑，见 CONTRIBUTING）：
 
 ```
-$ pnpm -r build && pnpm -r typecheck && pnpm -r test
+$ pnpm build && pnpm verify:dist && pnpm typecheck && pnpm test
+$ pnpm --filter playground typecheck && pnpm --filter playground build
 
 ```
 
@@ -32,3 +34,5 @@ $ pnpm -r build && pnpm -r typecheck && pnpm -r test
 - [ ] 新增/改动的公共 API 已同步 README 与对应包的 `README.md`
 - [ ] 新增依赖只在必要处（不加就更好的方案优先），已在描述里说明理由
 - [ ] 若改了 `core` 的公共类型或行为，vue/react 适配器的 typecheck/build 都跑过
+- [ ] 若改了配色 / 加了主题档位：新 token 在 **四档预设里都给了值**（漏一项 `theme.test.ts` 会红）、
+      布局层没出现颜色字面量、且按 WCAG 逐对量过对比度

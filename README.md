@@ -11,8 +11,9 @@
 > 一个数独小游戏。核心引擎不依赖任何框架，产出 **ESM / CJS / UMD / IIFE 四种格式**；
 > Vue 3 与 React 18/19 各有一份官方适配器，两端共享同一份样式表与引擎行为，完全一致。
 >
-> 本仓库照 [`my-gam/2048`](https://github.com/my-gam/2048) 三层模板搭建，先以 `0.0.0` 手工占位
-> 种下 npm 首版并跑通 Trusted Publisher，再由引擎与适配层按功能块逐笔提交落地。
+> 本仓库照 [`my-gam/2048`](https://github.com/my-gam/2048) 三层模板搭建，先手工 seed 一个占位版
+> 种下 npm 首版并跑通 Trusted Publisher（这段历史有两个坑，见下面「发布流程」1–2 条），再由引擎与
+> 适配层按功能块逐笔提交落地。
 
 - **技术栈**：TypeScript 7（Go-native tsgo）· Vite 8（Rolldown）· Vue 3.5 · React 19（peerDep 兼容 18.2+）· Vitest 5
 - **包结构**：`packages/core` + `packages/vue` + `packages/react`，pnpm workspace；`playground/` 是三 tab 演示页（Vanilla / Vue / React）。
@@ -46,12 +47,14 @@ node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 ## 在线 demo
 
 **<https://my-gam.github.io/sudoku/>** — 由 `pages.yml` 从 `main` 自动构建 deploy。
-可加 `?demo=vanilla|vue|react` 直接进某个 tab、`?hint=1` 显示「提示」按钮（默认 `hint()` 只作 API）。
+可加 `?demo=vanilla|vue|react` 直接进某个 tab、`?theme=light|dark|high-contrast|sepia|auto`
+直接换肤（可分享）、`?hint=1` 显示「提示」按钮（默认 `hint()` 只作 API）。
+主题偏好存在 `game-sudoku:theme`，刷新与换 tab 都保持；URL 参数优先级更高。
 
 ## 玩法
 
 - 点格子选中（或用方向键移动），按数字 1-9 / 点数字面板填入；`N` 切铅笔笔记，`Backspace` 擦除。
-- 题面给定数字（深色加粗）不可改；填错（与同行/列/宫重复）会标红并计一次错误，但不强制拦下。
+- 题面给定数字（中性淡底上的墨色粗字）不可改；填错（与同行/列/宫重复）会标红并计一次错误，但不强制拦下。
 - 填满且无冲突即通关，按难度记录最佳用时（用时从第一次真正动手起算：填数、擦除、记笔记、提示都算开始游戏，只有选格浏览不计时）。「提示」填对一格，「撤销」回退，难度条即时重开一局。
 - 题面给定数字 = 中性淡底上的墨色粗字，玩家填入 = 实心色块上的反白字，两套底色互差 ≥3:1（只改字色在数学上做不到一眼区分）。主题在页面顶部切换器可试四档，`?theme=dark` 之类可直接分享。
 - 存档与最佳用时落 `localStorage`（可注入自定义 `SaveStorage` 或 `null` 关闭）。
@@ -141,16 +144,93 @@ console.log(countSolutions(puzzle) === 1, solve(puzzle)); // true, 与 solution 
 | `showPad` | `boolean` | `true` | 是否显示数字键盘 |
 | `showHint` | `boolean` | `false` | 是否显示「提示」按钮；`hint()` 始终在 ref / `useGame` API 上 |
 | `title` | `string` | `'数独'` | 头部标题 |
+| `theme` | `'light'\|'dark'\|'high-contrast'\|'sepia'\|'auto'` | 不传（引擎决定） | 初始 / 受控主题；见下面「主题与自定义外观」 |
 
 事件：`input`/`onDigit({ digit, changed, row, col })`（`row`/`col` 为目标格，0 起算）、`solved({ difficulty, seconds })`；React 另有 `className`。
-`ref`（`GameSudokuInstance` / `GameSudokuHandle`）暴露 `select / input / erase / toggleNote / hint / newGame / undo`。
+`ref`（`GameSudokuInstance` / `GameSudokuHandle`）暴露 `select / input / erase / toggleNote / hint / newGame / undo / setTheme / getTheme`。
 
 ### 引擎核心 API（`@my-games/sudoku-core`）
 
-- `new Sudoku(options?)`：`difficulty` / `rng` / `clock` / `storage` / `saveKey` / `bestKey` / `freshStart` / `puzzle` / `solution` / `undoLimit`
+- `new Sudoku(options?)`：`difficulty` / `rng` / `clock` / `storage` / `saveKey` / `bestKey` /
+  `theme` / `themeKey` / `freshStart` / `puzzle` / `solution` / `undoLimit`
 - `subscribe/getState/getGrid/getPuzzle/getSolution` + `select/input/erase/toggleNote/hint/newGame/undo/canUndo/clearSaved`
+- 主题：`getTheme()` / `setTheme(next): boolean` / `getEffectiveTheme(prefersDark?)`；档位也在 `GameState.theme`
+- 档位与工具：`SUDOKU_THEMES` / `SUDOKU_DATA_THEMES` / `DEFAULT_THEME` / `isTheme` / `normalizeTheme` /
+  `resolveTheme` / `loadTheme` / `writeTheme` / `clearTheme` / `DEFAULT_THEME_KEY`
 - 求解/生成：`solve` / `countSolutions` / `generatePuzzle` / `generateFullGrid` / `TARGET_CLUES`
 - 纯函数原语与存储工具见 `packages/core/README.md`
+
+## 主题与自定义外观
+
+### 四档预设
+
+| 档位 | 气质 | 典型场景 |
+| --- | --- | --- |
+| `light`（默认） | 冷灰白 + 蓝 | 常规 |
+| `dark` | 中性深灰 + 亮蓝 | 夜间 |
+| `high-contrast` | 纯黑白 + 黄，分隔线最硬 | 强光、低视力 |
+| `sepia` | 米黄纸底 + 墨绿 | 长时间阅读 |
+
+档位归**引擎**持有，三种接法完全等价：
+
+```tsx
+<GameSudoku theme="dark" />                 {/* 组件属性：初始值 / 受控覆盖 */}
+gameRef.current?.setTheme('sepia');          {/* 命令式：落到引擎，UI 自己跟着重渲染 */}
+new Sudoku({ theme: 'auto' });               {/* IIFE / vanilla：不依赖任何框架 */}
+```
+
+- `'auto'` = 跟随系统深浅。core 保持零 DOM，所以解析发生在宿主侧：适配器用
+  `matchMedia` 拿到结果后调 `resolveTheme(theme, prefersDark)`（或
+  `game.getEffectiveTheme(prefersDark)`）得到具体档，再写进根元素的 `data-theme`。
+- 当前档在 `GameState.theme` 里随快照推给所有订阅者；`setTheme()` 收到登记表外的值
+  返回 `false` 且状态不动。
+- 持久化落在**独立键** `game-sudoku:theme`（可用 `themeKey` 改），与对局存档分家：
+  换难度、开新局都保留，刷新后仍在；`undo()` 不会把配色撤回去。
+
+### CSS 变量：逐色自定义
+
+样式表分三层。**契约层** `--sudoku-*` 是对外承诺；**解析层**把它映射成内部短名；
+**布局层**只消费短名，且不含一个颜色字面量（`test/theme.test.ts` 静态断言这点）。
+
+```css
+/* ✅ 覆盖生效：预设全部写成 :where(...) 零特异性，任何真实选择器都盖得住 */
+.game-sudoku {
+  --sudoku-cell-bg: #101820;
+  --sudoku-text-given: #e8edf3;
+  --sudoku-user-bg: #2f855a;   /* 玩家数字的实心色块 */
+  --sudoku-accent: #38b2ac;
+  --sudoku-board-size: min(96vw, 520px);
+}
+
+/* ✅ 就地改一个色也行 */
+// <GameSudoku class="game-sudoku" style={{ '--sudoku-given-bg': '#fff' }} />
+```
+
+```css
+/* ❌ 不生效：自定义属性就近解析，元素自身的声明优先于从 :root 继承的值 */
+:root { --sudoku-cell-bg: #101820; }
+```
+
+常用变量（完整约 32 个的清单与分组见 [`packages/core/README.md`](./packages/core/README.md#主题与样式契约)）：
+
+| 想要的效果 | 改哪个 |
+| --- | --- |
+| 棋盘整体尺寸 / 圆角 / 缝隙 | `--sudoku-board-size` · `--sudoku-radius` · `--sudoku-box-gap` · `--sudoku-cell-gap` |
+| 格子底、九宫分隔线 | `--sudoku-cell-bg` · `--sudoku-line-strong` · `--sudoku-line-soft` |
+| 题面数字（淡底 + 字重） | `--sudoku-given-bg` · `--sudoku-text-given` · `--sudoku-given-weight` |
+| 玩家数字（色块 + 反白） | `--sudoku-user-bg` · `--sudoku-text-user` · `--sudoku-user-ink-on-tint` |
+| 选中 / 同数 / 同行高亮 | `--sudoku-hl-selected` · `--sudoku-hl-same` · `--sudoku-hl-peer` |
+| 冲突格 | `--sudoku-bad-bg` · `--sudoku-bad-text` |
+| 按钮 / 数字面板 / 难度条 | `--sudoku-button-bg` · `--sudoku-pad-bg` · `--sudoku-chip-bg` 及各自 hover/text 配套 |
+| 强调色与其上文字、焦点环 | `--sudoku-accent` · `--sudoku-accent-dark` · `--sudoku-on-accent` · `--sudoku-focus-ring` |
+
+> **为什么题面数字与玩家数字是"两套底色"而不是两种字色**：同一张浅底上，两个颜色若都要过
+> WCAG AA 正文 4.5:1，彼此最多差约 1.28:1 —— 只改字色在数学上做不到一眼区分。所以给定数字
+> 走中性淡底 + 墨色粗字，玩家数字走实心色块 + 反白字，两套底色互差 ≥3:1（有硬断言）。
+> 字重差异只是辅助通道：Android 的 Roboto 没有 800 一档，16px 下 800 与 500 本来就分不开。
+>
+> 加新档位或改配色时，四档必须同时补齐同一组 token —— 漏一个不会悄悄变透明，
+> `test/theme.test.ts` 会直接判红。
 
 ## 目录结构
 
@@ -185,10 +265,15 @@ tag↔版本一致）→ `pnpm -r publish --access public --provenance`（OIDC T
 
 首版坑（本仓库已趟过）：
 
-1. **可信发布者发不了某包的第一个版本**，所以首版必须**手工** `npm publish`。想让它不占用 `latest`，
-   靠的是 **dist-tag** `--tag stage`，与版本号本身无关。
-2. **`0.0.0-stage` 是 npm Staged Publishing 的保留哨兵版本号**，普通 `publish` 用它会被 registry 拒
-   （`403`）。本项目改用 `0.0.0` 手工 seed，之后由 `v0.0.1` tag 经 CI 自动发布、`latest` 正常。
+1. **可信发布者发不了某包的第一个版本**，所以首版必须**手工** `npm publish`。想让占位版不占用
+   `latest`，靠的是 dist-tag（`--tag stage`），与版本号本身无关。
+2. **占位/预发布号必须带 `--tag` 发**，否则发布那一刻 `latest` 就指向它。本仓库当年连发了两个
+   占位版都没带 tag —— registry 的 `time` 可复核：`0.0.0-stage`（10-24 15:24:11）→ 76 秒后
+   `0.0.0`（15:25:27）→ `0.0.1`（15:49）→ `0.1.0`（10-25 07:31），而 `dist-tags` 现在只剩
+   `latest: 0.1.0`，即**两个无 tag 的孤儿占位版**。
+   > 更正：旧版本文档写过「`0.0.0-stage` 是 npm Staged Publishing 保留哨兵号、普通 publish 会被
+   > `403` 拒」——**不成立**，它实际发成功了（见上面的 `time`）。占位版 72h 内可 `unpublish`，
+   > 本包两个都已过期，只能 `npm deprecate`，暂不处理。
 3. `pnpm` 在 **Windows 下执行 package.json 脚本不剥单引号**，`--filter './packages/**'` 会被当字面量、
    匹配 0 项目、退出码仍是 0 → 三道门禁静默空跑假绿（Linux CI 的 `/bin/sh` 会剥，查不出）。根脚本因此
    一律用转义双引号 `--filter \"./packages/**\"`，并以 `tools/verify-dist.mjs` 断言产物把空跑变硬失败。
