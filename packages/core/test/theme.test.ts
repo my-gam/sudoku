@@ -356,9 +356,9 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
       expect(bg.startsWith('color-mix('), `${sel} 应当用 color-mix 调底，实际 ${bg}`).toBe(true);
       expect(bg.includes(anchor), `${sel} 的调底锚点应是 ${anchor}，实际 ${bg}`).toBe(true);
     };
-    expectMix('.game-sudoku-cell.is-given.is-peer', '--hl-same');
-    expectMix('.game-sudoku-cell.is-given.is-same', '--hl-same');
-    expectMix('.game-sudoku-cell.is-given.is-selected', '--hl-selected');
+    expectMix('.game-sudoku-cell.is-given.is-peer', '--accent');
+    expectMix('.game-sudoku-cell.is-given.is-same', '--accent');
+    expectMix('.game-sudoku-cell.is-given.is-selected', '--accent');
     expectMix('.game-sudoku-cell.is-user.is-peer', '--accent-dark');
     expectMix('.game-sudoku-cell.is-user.is-same', '--accent-dark');
     expectMix('.game-sudoku-cell.is-user.is-selected', '--accent-dark');
@@ -376,9 +376,9 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
       const deep = need(p, '--sudoku-accent-dark');
       const ink = need(p, '--sudoku-text-user');
       for (const [state, share] of [
-        ['peer', 72],
-        ['same', 55],
-        ['selected', 40]
+        ['peer', 45],
+        ['same', 35],
+        ['selected', 25]
       ] as const) {
         const bg = mix(chip, share, deep);
         const r = contrast(ink, bg);
@@ -392,9 +392,9 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
       const plate = need(p, '--sudoku-given-bg');
       const ink = need(p, '--sudoku-text-given');
       for (const [state, anchor, share] of [
-        ['peer', '--sudoku-hl-same', 72],
-        ['same', '--sudoku-hl-same', 55],
-        ['selected', '--sudoku-hl-selected', 40]
+        ['peer', '--sudoku-accent', 70],
+        ['same', '--sudoku-accent', 60],
+        ['selected', '--sudoku-accent', 55]
       ] as const) {
         const bg = mix(plate, share, need(p, anchor));
         const r = contrast(ink, bg);
@@ -407,6 +407,33 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
     for (const p of PRESETS) {
       const r = contrast(need(p, '--sudoku-text-given'), need(p, '--sudoku-given-bg'));
       expect(r, `${p.name} 给定数字对比不足：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(7);
+    }
+  });
+
+  it('调底必须真的「调得出」：状态底与原底的对比比有下限（防再犯「太浅」）', () => {
+    for (const p of PRESETS) {
+      // 题面侧锚点是 --accent，位移下限给得高（实测 1.40–3.43）
+      const plate = need(p, '--sudoku-given-bg');
+      const accent = need(p, '--sudoku-accent');
+      for (const [state, share, floor] of [
+        ['peer', 70, 1.35],
+        ['same', 60, 1.5],
+        ['selected', 55, 1.6]
+      ] as const) {
+        const r = contrast(plate, mix(plate, share, accent));
+        expect(r, `${p.name} 题面 ${state} 调底位移不足：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(floor);
+      }
+      // 玩家色块锚点是 --accent-dark；HC 的黄/深黄天然相近，下限放到 1.1（实测 1.15–1.32）
+      const chip = need(p, '--sudoku-user-bg');
+      const deep = need(p, '--sudoku-accent-dark');
+      for (const [state, share, floor] of [
+        ['peer', 45, 1.1],
+        ['same', 35, 1.1],
+        ['selected', 25, 1.1]
+      ] as const) {
+        const r = contrast(chip, mix(chip, share, deep));
+        expect(r, `${p.name} 玩家 ${state} 调底位移不足：${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(floor);
+      }
     }
   });
 

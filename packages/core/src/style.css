@@ -511,34 +511,38 @@
    「题面淡底 vs 玩家色块」这条身份通道就没了——同行/列/宫一多就分不清谁是谁。
    所以下面用 color-mix 把两套底色各自往高亮色「调一档」，身份保住、关联可见：
 
-   - 给定淡底 → 往 --hl-same / --hl-selected 调：四档里墨字对比都稳在 ≥7:1；
-   - 玩家色块 → 统一往 --accent-dark 调（即变深）：反白字在四档里保持 ≥4.5:1。
-     方向只能选变深——light 档色块一旦往浅调，白字会先跌破 4.5:1（实测 30% 就掉到 3.6）。
+   - 给定淡底 → 锚点是 --accent（高亮本体）：第一版用 --hl-same 做锚，但它和淡底几乎
+     同色，调了等于没调（用户实测「加深的太浅」）；换 --accent 后四档的底色位移达
+     1.4–3.4 倍对比比。份额 70/60/55 由探针实测钉出：再深就会跌破墨字 4.5:1
+     （dark 档 45% = 4.66 已贴线，HC 档 50% = 4.34 直接不合格）。
+   - 玩家色块 → 统一往 --accent-dark 调深（份额 45/35/25）。方向只能选变深——light 档
+     色块一旦往浅调，白字会先跌破 4.5:1。HC 档的色块位移天然偏小（黄与深黄本就相近，
+     1.15–1.22 倍），它的身份通道本就是全场最强的黄/白对比，选中另有描边兜底。
    - 选中格再加一圈 --accent 内描边：空格走平底+描边，数字格走调底+描边，观感一致。
 
    这些规则特异性 (0,3,0) 且排在三条平底之后：数字格上调底生效、空格保持平底。 */
 .game-sudoku-cell.is-given.is-peer {
-  background: color-mix(in srgb, var(--given-bg) 72%, var(--hl-same));
+  background: color-mix(in srgb, var(--given-bg) 70%, var(--accent));
 }
 
 .game-sudoku-cell.is-given.is-same {
-  background: color-mix(in srgb, var(--given-bg) 55%, var(--hl-same));
+  background: color-mix(in srgb, var(--given-bg) 60%, var(--accent));
 }
 
 .game-sudoku-cell.is-given.is-selected {
-  background: color-mix(in srgb, var(--given-bg) 40%, var(--hl-selected));
+  background: color-mix(in srgb, var(--given-bg) 55%, var(--accent));
 }
 
 .game-sudoku-cell.is-user.is-peer {
-  background: color-mix(in srgb, var(--user-bg) 72%, var(--accent-dark));
+  background: color-mix(in srgb, var(--user-bg) 45%, var(--accent-dark));
 }
 
 .game-sudoku-cell.is-user.is-same {
-  background: color-mix(in srgb, var(--user-bg) 55%, var(--accent-dark));
+  background: color-mix(in srgb, var(--user-bg) 35%, var(--accent-dark));
 }
 
 .game-sudoku-cell.is-user.is-selected {
-  background: color-mix(in srgb, var(--user-bg) 40%, var(--accent-dark));
+  background: color-mix(in srgb, var(--user-bg) 25%, var(--accent-dark));
 }
 
 /* 冲突态排在最后且并列 (0,3,0)：压过调底、描边与玩家本色 ——
