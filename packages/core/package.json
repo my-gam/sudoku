@@ -1,6 +1,6 @@
 {
   "name": "@my-games/sudoku-core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Framework-agnostic Sudoku game engine with a backtracking solver and unique-puzzle generator; ships ESM, CJS, UMD and IIFE builds. 无框架依赖的数独引擎，四格式产出。",
   "type": "module",
   "main": "./dist/index.cjs",

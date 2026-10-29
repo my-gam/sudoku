@@ -1,6 +1,6 @@
 {
   "name": "@my-games/sudoku-react",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "React 18/19 component adapter for @my-games/sudoku-core — function component + hooks + forwardRef, mobile-ready. 数独的 React 组件适配器。",
   "type": "module",
   "main": "./dist/index.js",
