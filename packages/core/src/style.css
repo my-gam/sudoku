@@ -36,8 +36,10 @@
  *   （AA 正文），彼此最多差约 1.28:1，光靠字色在数学上就不可能"一眼区分"。
  *   字重仍保留差异（700 vs 500），但它是辅助通道——Android 的 Roboto 没有 800 一档，
  *   16px 下 800 与 500 本来就拉不开。
- * - 玩家格被 选中/同数/同行 三类浅色填充盖住时改用深色字（--user-ink-on-tint），冲突态
- *   再压过它回到红字。规则顺序是这套配色能成立的前提，全部由 test/theme.test.ts 盯住。
+ * - 关联高亮（同行/列/宫、同数、选中）在**数字格上是调底不是刷底**：给定淡底往
+ *   --hl-same/--hl-selected 调、玩家色块统一往 --accent-dark 调（变深，保反白字 ≥4.5:1），
+ *   选中格另加一圈 --accent 内描边；空格保持平底（笔记需要可见的底）。冲突态最后压过一切。
+ *   规则顺序是这套配色能成立的前提，全部由 test/theme.test.ts 盯住。
  * - 冲突格红底；空格用 .cell-notes 3×3 迷你格画铅笔标记（笔记只出现在空格，与两类淡底
  *   结构互斥）。尺寸自适应：容器宽度决定一切，clamp() 缩放，320px～520px 视觉合理。
  * - prefers-reduced-motion 下关过渡/动画。
@@ -64,8 +66,6 @@
   --sudoku-given-weight: 700;
   --sudoku-text-user: #ffffff;
   --sudoku-user-bg: #1f6fc4;
-  /* 玩家格被 选中/同数/同行 这类浅色填充盖住时，反白字会看不见，故高亮态另给一支深色字。 */
-  --sudoku-user-ink-on-tint: #14539d;
   --sudoku-text-muted: #5f7182;
 
   /* 高亮 */
@@ -114,7 +114,6 @@
   --sudoku-given-weight: 700;
   --sudoku-text-user: #08131f;
   --sudoku-user-bg: #57a6f5;
-  --sudoku-user-ink-on-tint: #a8d8ff;
   --sudoku-text-muted: #9db0c2;
 
   /* 三级高亮按亮度递进；玩家数字压在最亮的一档上仍要过 4.5:1，所以整体压低一档 */
@@ -161,7 +160,6 @@
   --sudoku-given-weight: 700;
   --sudoku-text-user: #000000;
   --sudoku-user-bg: #ffd400;
-  --sudoku-user-ink-on-tint: #ffe95c;
   --sudoku-text-muted: #d2d2d2;
 
   /* 高亮做三级灰阶递进（黑底上淡色 tint 基本看不见），且都保证白字仍 ≥5:1 */
@@ -207,7 +205,6 @@
   --sudoku-given-weight: 700;
   --sudoku-text-user: #fdf6ea;
   --sudoku-user-bg: #8a5a2b;
-  --sudoku-user-ink-on-tint: #0d5340;
   --sudoku-text-muted: #67563f;
 
   --sudoku-hl-selected: #f0d7a3;
@@ -252,7 +249,6 @@
   --given-weight: var(--sudoku-given-weight);
   --text-user: var(--sudoku-text-user);
   --user-bg: var(--sudoku-user-bg);
-  --user-ink-on-tint: var(--sudoku-user-ink-on-tint);
   --text-muted: var(--sudoku-text-muted);
 
   --hl-selected: var(--sudoku-hl-selected);
@@ -507,18 +503,46 @@
 
 .game-sudoku-cell.is-selected {
   background: var(--hl-selected);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-/* 玩家格的实心色块被上面三种浅色高亮填充盖住时，反白字会直接看不见 → 这几态改用深色字。
-   特异性 (0,3,0) 压过 .is-user 的 (0,2,0)，且必须排在三个高亮规则之后。 */
-.game-sudoku-cell.is-user.is-peer,
-.game-sudoku-cell.is-user.is-same,
+/* —— 数字格的关联高亮：调底，不刷底 ——
+   上面三条平底只该作用于空格（笔记需要一块可见的底）。数字格若也被整格刷掉，
+   「题面淡底 vs 玩家色块」这条身份通道就没了——同行/列/宫一多就分不清谁是谁。
+   所以下面用 color-mix 把两套底色各自往高亮色「调一档」，身份保住、关联可见：
+
+   - 给定淡底 → 往 --hl-same / --hl-selected 调：四档里墨字对比都稳在 ≥7:1；
+   - 玩家色块 → 统一往 --accent-dark 调（即变深）：反白字在四档里保持 ≥4.5:1。
+     方向只能选变深——light 档色块一旦往浅调，白字会先跌破 4.5:1（实测 30% 就掉到 3.6）。
+   - 选中格再加一圈 --accent 内描边：空格走平底+描边，数字格走调底+描边，观感一致。
+
+   这些规则特异性 (0,3,0) 且排在三条平底之后：数字格上调底生效、空格保持平底。 */
+.game-sudoku-cell.is-given.is-peer {
+  background: color-mix(in srgb, var(--given-bg) 72%, var(--hl-same));
+}
+
+.game-sudoku-cell.is-given.is-same {
+  background: color-mix(in srgb, var(--given-bg) 55%, var(--hl-same));
+}
+
+.game-sudoku-cell.is-given.is-selected {
+  background: color-mix(in srgb, var(--given-bg) 40%, var(--hl-selected));
+}
+
+.game-sudoku-cell.is-user.is-peer {
+  background: color-mix(in srgb, var(--user-bg) 72%, var(--accent-dark));
+}
+
+.game-sudoku-cell.is-user.is-same {
+  background: color-mix(in srgb, var(--user-bg) 55%, var(--accent-dark));
+}
+
 .game-sudoku-cell.is-user.is-selected {
-  color: var(--user-ink-on-tint);
+  background: color-mix(in srgb, var(--user-bg) 40%, var(--accent-dark));
 }
 
-/* 冲突态排在最后且并列 (0,3,0)：既压过淡底也压过上面那条「高亮态深色字」，
-   选中一个填错的格子时必须看到红字，而不是玩家本色。 */
+/* 冲突态排在最后且并列 (0,3,0)：压过调底、描边与玩家本色 ——
+   选中一个填错的格子时必须看到红底红字。 */
 .game-sudoku-cell.is-conflict,
 .game-sudoku-cell.is-user.is-conflict {
   background: var(--bad);

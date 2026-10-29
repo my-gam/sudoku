@@ -333,12 +333,72 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
     }
   });
 
-  it('高亮态深色字压住选中/同数/同行三种浅色填充，全部 ≥4.5:1', () => {
+  /** CSS `color-mix(in srgb, A p%, B)` 的同款插值：sRGB 分量线性（在伽马编码值上插值）。 */
+  const mix = (a: string, share: number, b: string): string => {
+    const toRgb = (hex: string): [number, number, number] => {
+      const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+      if (!m || !m[1]) throw new Error(`契约层出现非 #rrggbb 的颜色：${hex}`);
+      const n = m[1];
+      return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
+    };
+    const [r1, g1, b1] = toRgb(a);
+    const [r2, g2, b2] = toRgb(b);
+    const f = (x: number, y: number): number => Math.round(x * (share / 100) + y * (1 - share / 100));
+    const h = (v: number): string => v.toString(16).padStart(2, '0');
+    return `#${h(f(r1, r2))}${h(f(g1, g2))}${h(f(b1, b2))}`;
+  };
+
+  it('数字格的关联高亮是「调底」不是「刷底」：六条 color-mix 规则齐全、锚点正确', () => {
+    const expectMix = (sel: string, anchor: string): void => {
+      const rule = RULES.find((r) => r.selector === sel);
+      if (!rule) throw new Error(`缺少规则 ${sel}`);
+      const bg = declMap(rule).get('background') ?? '';
+      expect(bg.startsWith('color-mix('), `${sel} 应当用 color-mix 调底，实际 ${bg}`).toBe(true);
+      expect(bg.includes(anchor), `${sel} 的调底锚点应是 ${anchor}，实际 ${bg}`).toBe(true);
+    };
+    expectMix('.game-sudoku-cell.is-given.is-peer', '--hl-same');
+    expectMix('.game-sudoku-cell.is-given.is-same', '--hl-same');
+    expectMix('.game-sudoku-cell.is-given.is-selected', '--hl-selected');
+    expectMix('.game-sudoku-cell.is-user.is-peer', '--accent-dark');
+    expectMix('.game-sudoku-cell.is-user.is-same', '--accent-dark');
+    expectMix('.game-sudoku-cell.is-user.is-selected', '--accent-dark');
+  });
+
+  it('数字格被选中时必须有 --accent 内描边（与空格的平底+描边观感一致）', () => {
+    const sel = RULES.find((r) => r.selector === '.game-sudoku-cell.is-selected');
+    if (!sel) throw new Error('缺少 .is-selected 规则');
+    expect(declMap(sel).get('box-shadow')).toBe('inset 0 0 0 2px var(--accent)');
+  });
+
+  it('调底之后反白玩家字仍 ≥4.5:1（peer/same/selected 三态 × 四档）', () => {
     for (const p of PRESETS) {
-      const ink = need(p, '--sudoku-user-ink-on-tint');
-      for (const tint of ['--sudoku-hl-selected', '--sudoku-hl-same', '--sudoku-hl-peer']) {
-        const r = contrast(ink, need(p, tint));
-        expect(r, `${p.name} 玩家数字压 ${tint} 上只有 ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      const chip = need(p, '--sudoku-user-bg');
+      const deep = need(p, '--sudoku-accent-dark');
+      const ink = need(p, '--sudoku-text-user');
+      for (const [state, share] of [
+        ['peer', 72],
+        ['same', 55],
+        ['selected', 40]
+      ] as const) {
+        const bg = mix(chip, share, deep);
+        const r = contrast(ink, bg);
+        expect(r, `${p.name} 玩家数字在 ${state} 调底上只有 ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('调底之后给定墨字仍 ≥4.5:1（peer/same/selected 三态 × 四档）', () => {
+    for (const p of PRESETS) {
+      const plate = need(p, '--sudoku-given-bg');
+      const ink = need(p, '--sudoku-text-given');
+      for (const [state, anchor, share] of [
+        ['peer', '--sudoku-hl-same', 72],
+        ['same', '--sudoku-hl-same', 55],
+        ['selected', '--sudoku-hl-selected', 40]
+      ] as const) {
+        const bg = mix(plate, share, need(p, anchor));
+        const r = contrast(ink, bg);
+        expect(r, `${p.name} 给定数字在 ${state} 调底上只有 ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
@@ -350,19 +410,21 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
     }
   });
 
-  it('玩家格被高亮覆盖时必须改用深色字，冲突态再压过它', () => {
+  it('冲突态排在全部调底规则之后：选中的错格必须红底红字', () => {
     const at = (sel: string): number => {
       const idx = CSS.indexOf(`\n${sel},`) === -1 ? CSS.indexOf(`\n${sel} {`) : CSS.indexOf(`\n${sel},`);
       if (idx < 0) throw new Error(`找不到规则 ${sel}`);
       return idx;
     };
-    const onTint = at('.game-sudoku-cell.is-user.is-peer');
     const conflict = at('.game-sudoku-cell.is-conflict');
-    expect(onTint, '高亮态深色字规则缺失').toBeGreaterThan(-1);
-    expect(conflict, '冲突态必须在「高亮态深色字」之后，否则选中的错格看不到红字').toBeGreaterThan(onTint);
-    const rule = RULES.find((r) => r.selector.includes('.game-sudoku-cell.is-user.is-peer'));
-    if (!rule) throw new Error('找不到玩家格高亮态规则');
-    expect(declMap(rule).get('color')).toBe('var(--user-ink-on-tint)');
+    for (const sel of [
+      '.game-sudoku-cell.is-given.is-peer',
+      '.game-sudoku-cell.is-given.is-selected',
+      '.game-sudoku-cell.is-user.is-peer',
+      '.game-sudoku-cell.is-user.is-selected'
+    ]) {
+      expect(conflict, `冲突态必须排在 ${sel} 之后`).toBeGreaterThan(at(sel));
+    }
   });
 });
 

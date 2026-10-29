@@ -100,7 +100,7 @@ unsub();
 可覆盖的完整清单（约 32 个，四档均已给值）：结构线 `--sudoku-line-strong` /
 `--sudoku-line-soft` / `--sudoku-cell-bg`；文字 `--sudoku-text-base` / `--sudoku-text-given` /
 `--sudoku-text-user` / `--sudoku-text-muted`；题面数字 `--sudoku-given-bg` /
-`--sudoku-given-weight`；玩家数字 `--sudoku-user-bg` / `--sudoku-user-ink-on-tint`；
+`--sudoku-given-weight`；玩家数字 `--sudoku-user-bg`；
 高亮 `--sudoku-hl-selected` / `--sudoku-hl-peer` / `--sudoku-hl-same` /
 `--sudoku-bad-bg` / `--sudoku-bad-text`；强调 `--sudoku-accent` / `--sudoku-accent-dark` /
 `--sudoku-on-accent` / `--sudoku-focus-ring`；控件 `--sudoku-chip-bg` / `--sudoku-button-bg` /
@@ -113,10 +113,15 @@ unsub();
 所以「只改字色」永远做不到一眼区分，必须动底色。字重差异（700 vs 500）保留但只作辅助通道
 （Android 的 Roboto 没有 800 一档，16px 下 800 与 500 本来就拉不开）；窄屏另有
 `@media (max-width: 420px)` 单独把给定数字号抬半档。
-玩家格被选中/同数/同行高亮盖住时改用 `--sudoku-user-ink-on-tint`（否则反白字会压在浅色填充上
-看不见），冲突态再压过它回到红字——这两条顺序都有测试盯着。
-四档配色按 WCAG 2.1 逐对实测过线，且「两套底色互差 ≥3:1」「色块与普通格子互差 ≥3:1」
-是 `test/theme.test.ts` 里的硬断言。
+
+**关联高亮在数字格上是「调底」不是「刷底"**：同行/列/宫、同数、选中这三类高亮若整格刷底，
+会把「题面 vs 玩家」的身份通道抹掉——选中一格后扫一眼同行，就分不清哪些是题面哪些是你填的。
+所以数字格上高亮改用 `color-mix` 把两套底色各自往高亮色调一档（给定淡底往 `--hl-same`/
+`--hl-selected`、玩家色块统一往 `--accent-dark` 调深，方向只能变深——往浅调反白字会先跌破
+4.5:1），选中格再加一圈 `--accent` 内描边；空格仍是平底（笔记需要可见的底）。
+冲突态排在最后，压过一切回红字——这些顺序与阈值都有测试盯着。
+四档配色按 WCAG 2.1 逐对实测过线（含三档调底态），且「两套底色互差 ≥3:1」
+「色块与普通格子互差 ≥3:1」是 `test/theme.test.ts` 里的硬断言。
 
 ## 规则要点
 

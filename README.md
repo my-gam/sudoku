@@ -56,7 +56,7 @@ node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 - 点格子选中（或用方向键移动），按数字 1-9 / 点数字面板填入；`N` 切铅笔笔记，`Backspace` 擦除。
 - 题面给定数字（中性淡底上的墨色粗字）不可改；填错（与同行/列/宫重复）会标红并计一次错误，但不强制拦下。
 - 填满且无冲突即通关，按难度记录最佳用时（用时从第一次真正动手起算：填数、擦除、记笔记、提示都算开始游戏，只有选格浏览不计时）。「提示」填对一格，「撤销」回退，难度条即时重开一局。
-- 题面给定数字 = 中性淡底上的墨色粗字，玩家填入 = 实心色块上的反白字，两套底色互差 ≥3:1（只改字色在数学上做不到一眼区分）。主题在页面顶部切换器可试四档，`?theme=dark` 之类可直接分享。
+- 题面给定数字 = 中性淡底上的墨色粗字，玩家填入 = 实心色块上的反白字，两套底色互差 ≥3:1（只改字色在数学上做不到一眼区分）。选中一格后，同行/列/宫的高亮在数字格上是把各自底色"调一档"而不是刷掉，题面/玩家身份仍一眼可辨。主题在页面顶部切换器可试四档，`?theme=dark` 之类可直接分享。
 - 存档与最佳用时落 `localStorage`（可注入自定义 `SaveStorage` 或 `null` 关闭）。
 
 ## 集成到你的项目
@@ -218,7 +218,7 @@ new Sudoku({ theme: 'auto' });               {/* IIFE / vanilla：不依赖任�
 | 棋盘整体尺寸 / 圆角 / 缝隙 | `--sudoku-board-size` · `--sudoku-radius` · `--sudoku-box-gap` · `--sudoku-cell-gap` |
 | 格子底、九宫分隔线 | `--sudoku-cell-bg` · `--sudoku-line-strong` · `--sudoku-line-soft` |
 | 题面数字（淡底 + 字重） | `--sudoku-given-bg` · `--sudoku-text-given` · `--sudoku-given-weight` |
-| 玩家数字（色块 + 反白） | `--sudoku-user-bg` · `--sudoku-text-user` · `--sudoku-user-ink-on-tint` |
+| 玩家数字（色块 + 反白） | `--sudoku-user-bg` · `--sudoku-text-user` |
 | 选中 / 同数 / 同行高亮 | `--sudoku-hl-selected` · `--sudoku-hl-same` · `--sudoku-hl-peer` |
 | 冲突格 | `--sudoku-bad-bg` · `--sudoku-bad-text` |
 | 按钮 / 数字面板 / 难度条 | `--sudoku-button-bg` · `--sudoku-pad-bg` · `--sudoku-chip-bg` 及各自 hover/text 配套 |
@@ -228,6 +228,10 @@ new Sudoku({ theme: 'auto' });               {/* IIFE / vanilla：不依赖任�
 > WCAG AA 正文 4.5:1，彼此最多差约 1.28:1 —— 只改字色在数学上做不到一眼区分。所以给定数字
 > 走中性淡底 + 墨色粗字，玩家数字走实心色块 + 反白字，两套底色互差 ≥3:1（有硬断言）。
 > 字重差异只是辅助通道：Android 的 Roboto 没有 800 一档，16px 下 800 与 500 本来就分不开。
+>
+> **选中一格后，同行/列/宫的高亮是"调底"不是"刷底"**：数字格的高亮用 `color-mix` 把各自的
+> 底色往高亮色调一档（玩家色块变深、题面淡底带上一笔高亮色），身份一眼可辨；空格仍是平底
+> （笔记需要）。选中格另有 `--sudoku-accent` 内描边。
 >
 > 加新档位或改配色时，四档必须同时补齐同一组 token —— 漏一个不会悄悄变透明，
 > `test/theme.test.ts` 会直接判红。
