@@ -33,12 +33,14 @@ unsub();
 ## 引擎 API
 
 - `new Sudoku(options?)` — 全可注入：`difficulty` / `rng` / `clock` / `storage` / `saveKey` /
-  `bestKey` / `theme` / `themeKey` / `freshStart` / `puzzle` / `solution` / `undoLimit`。
-  默认 `difficulty:'easy'` 现场生成唯一解题。
+  `bestKey` / `theme` / `themeKey` / `autoNotes` / `autoNotesKey` / `freshStart` / `puzzle` /
+  `solution` / `undoLimit`。默认 `difficulty:'easy'` 现场生成唯一解题。
 - `game.subscribe(fn): () => void` — 注册即收一次快照，返回退订函数。
 - `game.getState()` — `GameState` 深拷贝快照；`getGrid()` / `getPuzzle()` / `getSolution()`。
 - 主题：`getTheme()` / `setTheme(next): boolean` / `getEffectiveTheme(prefersDark?)`，
   档位也在 `GameState.theme` 里。详见下面「主题与样式契约」。
+- 自动候选：`getAutoNotes()` / `setAutoNotes(next): boolean`，开关在 `GameState.autoNotes`。
+  详见下面「自动候选笔记」。
 - 操作：`select(row, col)` / `input(digit)` / `erase()` / `toggleNote(digit)` / `hint()` /
   `newGame(difficulty?)` / `undo()` / `canUndo()` / `clearSaved()`。
 - 求解/生成：`solve(grid)` / `countSolutions(grid, limit=2)` / `generatePuzzle(difficulty, rng)` /
@@ -132,6 +134,34 @@ unsub();
   只选格浏览不计时；`elapsedSeconds` 在 `won` 时定格。
 - 存档（含题面、解、当前盘、笔记、计数、用时）落 `saveKey`；`best`（分难度）落 `bestKey`；
   同难度同题面才续档，损坏 JSON / 版本不符自动开新局。
+
+## 自动候选笔记（`autoNotes`，默认关）
+
+```ts
+const game = new Sudoku({ autoNotes: true });   // 或 game.setAutoNotes(true)
+game.getAutoNotes();                            // 当前开关
+```
+
+开启后引擎在每个空格按盘面灌入候选数（就是 `candidates(grid,r,c)` 的结果），并在**每次盘面值
+变化后**整体重算：`input` / `erase` / `hint` / `undo` / 新开局 / 续档 / 刚开启的那一刻。
+`toggleNote`（手写笔记）刻意不触发重算，所以你手改的那条能活到下一次盘面变化。
+
+三条边界（都有测试钉住）：
+
+1. **不起表**：候选是引擎派生态、不是玩家动手，所以它绝不叫 `ensureStarted()`，也不计
+   `moveCount`。同时续档时的「已动手」推定在自动模式下**不看笔记**——否则人人都有一盘候选，
+   计时会在玩家什么都没做时凭空走起来。
+2. **与手写笔记同一通道**（这是选定的取舍，不是缺陷）：自动模式下你手动加/删的笔记会在
+   下一次盘面变化时被覆盖。想完全掌控笔记就关掉它。
+3. **关掉时不清空笔记**：同一通道下引擎已分不清哪条是谁写的，宁可留下也不误删玩家手写内容；
+   要清可逐格 `erase()`。
+
+为什么默认关：实测 easy 档平均每格只有 **1.9** 个候选，意味着大量格子只剩 1 个候选——而
+"只剩一个候选"在数独里就是答案本身（naked single）。自动灌候选在简单档会把玩法退化成
+"扫谁只有一个候选"，所以做成显式开关而不是默认行为，且不随难度差异化（规则一致，不埋隐藏行为）。
+
+持久化：与主题同构，落在独立键 `game-sudoku:auto-notes`，**不进对局存档、不进 undo 历史**；
+优先级 `opts.autoNotes` > 已持久化 > `false`。
 
 完整玩法、Props / Events / ref API、设计取舍见仓库根 README：<https://github.com/my-gam/sudoku#readme>
 

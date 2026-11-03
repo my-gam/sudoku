@@ -28,7 +28,7 @@ export function Demo() {
 ## Props
 
 同 Vue 版：`difficulty` / `storage` / `saveKey` / `bestKey` / `freshStart` / `autofocus` / `showPad` /
-`showHint`（默认 `false`，`hint()` 始终在句柄 / `useGame` 上）/ `title` / `theme`，另有 `className`（追加到最外层
+`showHint`（默认 `false`，`hint()` 始终在句柄 / `useGame` 上）/ `title` / `theme` / `autoNotes`，另有 `className`（追加到最外层
 `.game-sudoku`）、`onDigit({ digit, changed, row, col })`、`onSolved({ difficulty, seconds })`。
 
 `theme?: SudokuTheme`（`'light'|'dark'|'high-contrast'|'sepia'|'auto'`）——**档位归 core 引擎**：
@@ -47,8 +47,13 @@ import { GameSudoku, type GameSudokuHandle } from '@my-games/sudoku-react';
 
 const g = useRef<GameSudokuHandle>(null);
 // g.current?.select(0, 2); g.current?.input(4); g.current?.hint(); g.current?.undo();
-// g.current?.setTheme('dark'); g.current?.getTheme();  // 主题也在引擎上，返回 false = 档位非法
+// g.current?.setTheme('dark'); g.current?.getTheme();       // 主题也在引擎上，返回 false = 档位非法
+// g.current?.setAutoNotes(true); g.current?.getAutoNotes(); // 自动候选同理，返回 false = 传入不是布尔
 ```
+
+`autoNotes?: boolean`（初始 / 受控，不传则由引擎读 `game-sudoku:auto-notes`，最终 `false`）：开启后
+引擎按盘面把候选灌进 `notes`，与手写笔记同一通道（下一次盘面变化会覆盖手改的那条），不起表、
+不进 undo 与对局存档。组件工具栏自带「候选」开关。
 
 ## Hook（想自己画 UI）
 

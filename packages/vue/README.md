@@ -38,13 +38,15 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 | `showHint` | `boolean` | `false` | 是否显示「提示」按钮（`hint()` 始终在 ref / `useGame` 上） |
 | `title` | `string` | `'数独'` | 头部标题 |
 | `theme` | `'light'\|'dark'\|'high-contrast'\|'sepia'\|'auto'` | 不传（由引擎决定） | 初始 / 受控主题；渲染成根元素 `data-theme`，`auto` 由组件用 `matchMedia` 解析并跟随系统变化 |
+| `autoNotes` | `boolean` | 不传（引擎决定） | 自动候选笔记开关的初始 / 受控值；不传时引擎读 `game-sudoku:auto-notes`，最终 `false` |
 
-> **档位的归属在 core 引擎**，不在组件里：不传 `theme` 时引擎读自己的持久化偏好
-> （`game-sudoku:theme`）并回落 `light`；传了则写回引擎。刷新后主题保持，且同一页面的多个
-> 实例共享这份偏好。选 `auto` 时首帧按 `light` 渲染（与 SSR 输出一致、不报水合不匹配），
-> 系统为深色则挂载后有一次可见闪变；要消除请在服务端读 `Sec-CH-Prefers-Color-Scheme` 后
-> 直接传具体档。逐项改配色见 core README「主题与样式契约」——覆盖要打在 `.game-sudoku` 上，
-> 写 `:root` 不生效。
+> `theme` 与 `autoNotes` 的**归属都在 core 引擎**，组件只负责把值写回引擎、并把引擎状态渲染出来
+> （「候选」按钮读 `state.autoNotes`，不是组件内的本地副本 —— 否则宿主走 `ref.setAutoNotes()`
+> 时按钮会与实际脱节）。两者都各自持久化（`game-sudoku:theme` / `game-sudoku:auto-notes`），
+> 刷新后保持，同页多实例共享。选 `theme="auto"` 时首帧按 `light` 渲染（与 SSR 输出一致、不报
+> 水合不匹配），系统为深色则挂载后有一次可见闪变；要消除请在服务端读
+> `Sec-CH-Prefers-Color-Scheme` 后直接传具体档。逐项改配色见 core README「主题与样式契约」——
+> 覆盖要打在 `.game-sudoku` 上，写 `:root` 不生效。
 
 ## 事件
 
@@ -53,8 +55,8 @@ function onSolved(p: { difficulty: string; seconds: number }) {
 
 ## Ref 命令式方法（`GameSudokuInstance`）
 
-`select / input / erase / toggleNote / hint / newGame / undo / setTheme / getTheme`。
-`setTheme(next)` 直接打到引擎上（返回 `false` = 档位不合法），改完组件自己会重渲染。
+`select / input / erase / toggleNote / hint / newGame / undo / setTheme / getTheme / setAutoNotes / getAutoNotes`。
+`setTheme(next)` 与 `setAutoNotes(next)` 直接打到引擎上（分别返回 `false` 表示档位非法 / 传入不是布尔），改完组件自己会重渲染。
 
 ## Composable（想自己画 UI）
 
