@@ -66,11 +66,15 @@ export interface GameState {
   moveCount: number;
   /** 可撤销栈深度；>0 时 UI 可点亮「撤销」。 */
   historySize: number;
-  /**
-   * 主题档位（用户请求值，可能是 'auto'）。属于偏好而非局状态：不进存档、不进
+  /** 主题档位（用户请求值，可能是 'auto'）。属于偏好而非局状态：不进存档、不进
    * undo 历史，单独落在 themeKey。渲染成什么颜色由消费方解析（见 resolveTheme）。
    */
   theme: SudokuTheme;
+  /**
+   * 自动候选笔记是否开启。与 theme 同类：是偏好不是局状态，落在独立的 autoNotesKey。
+   * 开启时 `notes` 由引擎按盘面重算（**同一通道**，手写笔记会在下一次重算时被覆盖）。
+   */
+  autoNotes: boolean;
 }
 
 /** 一局的可回退快照（不含派生态与计时，undo 时整体还原）。 */
@@ -140,6 +144,10 @@ export interface GameOptions {
   theme?: SudokuTheme;
   /** 主题偏好的存储键，默认 `game-sudoku:theme`（与对局存档分家）。 */
   themeKey?: string;
+  /** 自动候选笔记的初始开关。不传则读 autoNotesKey 里的持久值，最终回落 false。 */
+  autoNotes?: boolean;
+  /** 自动候选偏好的存储键，默认 `game-sudoku:auto-notes`。 */
+  autoNotesKey?: string;
   /** 构造时忽略已有存档，直接开新局。 */
   freshStart?: boolean;
   /** 固定题面（含 0 空格）：给定时用它而非现场生成（固定题 / 测试场景）。 */

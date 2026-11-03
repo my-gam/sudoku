@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Sudoku } from '../src/game';
+import { candidates } from '../src/board';
 import { DEFAULT_THEME_KEY, writeTheme } from '../src/storage';
 import type { SudokuTheme } from '../src/themes';
 import type { Cell, Clock, Digit, Grid, SaveStorage } from '../src/types';
@@ -310,6 +311,141 @@ describe('Sudoku 通关与计时', () => {
     expect(s.grid[0]?.[2]).toBe(0);
     now = 20000;
     expect(g.getState().elapsedSeconds).toBe(0); // 已停表，仍 0
+  });
+});
+
+describe('Sudoku 自动候选笔记（引擎派生态，默认关）', () => {
+  /** 不变量：自动模式下每个空格的笔记恰等于它的候选集。 */
+  function assertNotesAreCandidates(g: Sudoku): void {
+    const s = g.getState();
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if ((s.grid[r]?.[c] ?? 0) !== 0) continue;
+        expect(s.notes[r]?.[c]).toEqual(candidates(s.grid, r, c));
+      }
+    }
+  }
+
+  it('默认关：开局没有任何笔记', () => {
+    const g = newGame({ freshStart: true });
+    expect(g.getAutoNotes()).toBe(false);
+    expect(g.getState().autoNotes).toBe(false);
+    expect(g.getState().notes.flat().filter((n) => n.length > 0)).toHaveLength(0);
+  });
+
+  it('构造时开启：所有空格灌入候选，且不因此起表、不计步', () => {
+    let now = 0;
+    const g = newGame({ freshStart: true, autoNotes: true, clock: () => now });
+    now = 9000;
+    assertNotesAreCandidates(g);
+    expect(g.getState().notes[0]?.[2]).toEqual([1, 2, 4]); // 手算复核一行：题面 5,3,7 + 列 8 + 宫 6,9
+    expect(g.getState().elapsedSeconds).toBe(0); // ★ 派生态不能把表带起来
+    expect(g.getState().moveCount).toBe(0);
+    now = 20000;
+    g.select(0, 2);
+    expect(g.input(4)).toBe(true);
+    expect(g.getState().elapsedSeconds).toBe(0); // 起表点 = 首次改动那一刻（不是构造时的 9000）
+    now = 25000;
+    expect(g.getState().elapsedSeconds).toBe(5); // 从 20000 起算，证明自动候选没提前把表带起来
+  });
+
+  it('自动候选不污染续档的「已动手」推定（只有自动笔记时仍算没开始）', () => {
+    let now = 0;
+    const clock: Clock = () => now;
+    const storage = memStorage();
+    const g1 = newGame({ storage, freshStart: true, autoNotes: true, clock });
+    g1.newGame(); // 落一份只有自动候选、moveCount 0、用时 0 的存档
+    expect(g1.getState().notes.flat().some((n) => n.length > 0)).toBe(true);
+    const g2 = newGame({ storage, clock });
+    expect(g2.getAutoNotes()).toBe(true); // 偏好独立持久化，重开仍在
+    now = 30000;
+    expect(g2.getState().elapsedSeconds).toBe(0); // 没有这条修正，计时会凭空走起来
+    // 对照：同样「只有笔记」但自动候选关着的存档，仍判为已动手 —— 见下一条 describe 里
+    // 「只有笔记且用时 0 的存档」那条既有用例（它跑的是默认关的 newGame helper）。
+  });
+
+  it('填数后候选整体重算：同行格的笔记里失去刚填的数字', () => {
+    const g = newGame({ freshStart: true, autoNotes: true });
+    expect(g.getState().notes[0]?.[5]).toContain(4); // (0,5) 原本可以是 4
+    g.select(0, 2);
+    g.input(4);
+    assertNotesAreCandidates(g);
+    expect(g.getState().notes[0]?.[5]).not.toContain(4);
+    expect(g.getState().notes[0]?.[2]).toEqual([]); // 有值的格不带笔记
+  });
+
+  it('擦除一个数字后，该格重新拿到候选', () => {
+    const g = newGame({ freshStart: true, autoNotes: true });
+    g.select(0, 2);
+    g.input(4);
+    expect(g.getState().notes[0]?.[2]).toEqual([]);
+    g.erase();
+    assertNotesAreCandidates(g);
+    expect(g.getState().notes[0]?.[2].length).toBeGreaterThan(0);
+  });
+
+  it('同通道取舍：手改的笔记活到下一次盘面变化，然后被重算覆盖', () => {
+    const g = newGame({ freshStart: true, autoNotes: true });
+    g.select(0, 5);
+    g.toggleNote(9); // 手动加一条（9 其实不是候选）
+    expect(g.getState().notes[0]?.[5]).toContain(9);
+    g.select(0, 2);
+    g.input(4); // 盘面一变 → 整体重算，手改的那条被覆盖
+    assertNotesAreCandidates(g);
+    expect(g.getState().notes[0]?.[5]).not.toContain(9);
+  });
+
+  it('setAutoNotes(true) 立刻灌入并通知订阅、落独立键；关掉的不动已有笔记', () => {
+    const storage = memStorage();
+    const g = newGame({ storage, freshStart: true });
+    const seen: boolean[] = [];
+    g.subscribe((s) => seen.push(s.autoNotes));
+    expect(seen).toEqual([false]);
+    expect(g.setAutoNotes(true)).toBe(true);
+    expect(seen).toEqual([false, true]);
+    assertNotesAreCandidates(g);
+    expect(JSON.parse(storage.dump()['game-sudoku:auto-notes'] ?? 'null')).toBe(true);
+    g.setAutoNotes(false);
+    expect(g.getState().notes.flat().some((n) => n.length > 0)).toBe(true); // 不破坏性清空
+    // 关掉之后不再整体重算：填 (0,2)=4 只清掉该格笔记，同行 (0,5) 的候选里 4 仍然留着
+    const peerBefore = g.getState().notes[0]?.[5];
+    expect(peerBefore).toContain(4);
+    g.select(0, 2);
+    g.input(4);
+    expect(g.getState().notes[0]?.[2]).toEqual([]); // 本格清空是 input 的既有行为
+    expect(g.getState().notes[0]?.[5]).toEqual(peerBefore); // 但没触发整体重算
+  });
+
+  it('非法值被拒；同值幂等不重复通知', () => {
+    const g = newGame({ freshStart: true });
+    let notifications = 0;
+    g.subscribe(() => {
+      notifications++;
+    });
+    expect(notifications).toBe(1);
+    expect(g.setAutoNotes('yes' as unknown as boolean)).toBe(false);
+    expect(notifications).toBe(1);
+    expect(g.getAutoNotes()).toBe(false);
+    expect(g.setAutoNotes(false)).toBe(true);
+    expect(notifications).toBe(1); // 同值不通知
+  });
+
+  it('undo 后候选按回退盘面重算；偏好本身不进 undo', () => {
+    const g = newGame({ freshStart: true, autoNotes: true });
+    g.select(0, 2);
+    g.input(4);
+    const withFour = JSON.stringify(g.getState().notes);
+    expect(g.undo()).toBe(true);
+    assertNotesAreCandidates(g);
+    expect(JSON.stringify(g.getState().notes)).not.toBe(withFour); // 回到填 4 之前的候选
+    expect(g.getAutoNotes()).toBe(true); // 撤销不会把开关撤掉
+  });
+
+  it('换难度 / 开新局保留开关', () => {
+    const g = newGame({ freshStart: true, autoNotes: true });
+    g.newGame('hard');
+    expect(g.getAutoNotes()).toBe(true);
+    assertNotesAreCandidates(g);
   });
 });
 

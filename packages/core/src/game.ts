@@ -1,15 +1,18 @@
-import { SIZE, cellAt, cloneGrid, findConflicts, hasConflict, isSafe, setCell } from './board';
+import { SIZE, candidates, cellAt, cloneGrid, emptyCells, findConflicts, hasConflict, isSafe, setCell } from './board';
 import { generatePuzzle } from './generator';
 import { solve } from './solver';
 import {
+  DEFAULT_AUTO_NOTES_KEY,
   DEFAULT_BEST_KEY,
   DEFAULT_SAVE_KEY,
   DEFAULT_THEME_KEY,
   clearSave,
+  loadAutoNotes,
   loadBest,
   loadSave,
   loadTheme,
   tryGetGlobalStorage,
+  writeAutoNotes,
   writeBest,
   writeSave,
   writeTheme
@@ -81,6 +84,9 @@ function sortedUnique(digits: Digit[]): Digit[] {
  * - 主题：也是引擎状态的一部分（`getTheme` / `setTheme`），随 `GameState.theme` 推给订阅者，
  *   落在独立的 `themeKey`（不占对局存档、不进 undo 历史）。core 不碰 DOM，`auto` 由宿主把
  *   `matchMedia` 的结果喂给 `getEffectiveTheme(prefersDark)` 这一纯解析。
+ * - 自动候选（`getAutoNotes` / `setAutoNotes`，默认关）：开启时引擎按盘面把候选灌进
+ *   `notes`，与手写笔记同一通道（下一次盘面变化会覆盖手改的那条）。它是派生态，
+ *   因此不起表、不计步、不进存档与 undo。
  */
 export class Sudoku {
   private readonly rng: RandomSource;
@@ -89,6 +95,7 @@ export class Sudoku {
   private readonly saveKey: string;
   private readonly bestKey: string;
   private readonly themeKey: string;
+  private readonly autoNotesKey: string;
   private readonly undoLimit: number;
   private readonly fixedPuzzle: Grid | null;
   private readonly fixedSolution: Grid | null;
@@ -115,8 +122,9 @@ export class Sudoku {
   private finalMs = 0;
 
   private best: BestTimes;
-  // 主题偏好：局外状态，不进存档也不进 undo 历史，单独落在 themeKey。
+  // 主题与自动候选都是偏好：局外状态，不进存档也不进 undo 历史，各自落在独立键。
   private theme: SudokuTheme;
+  private autoNotes: boolean;
 
   private listeners = new Set<(state: GameState) => void>();
   private notifying = false;
@@ -129,6 +137,7 @@ export class Sudoku {
     this.bestKey = opts.bestKey ?? DEFAULT_BEST_KEY;
     this.undoLimit = opts.undoLimit ?? DEFAULT_UNDO_LIMIT;
     this.themeKey = opts.themeKey ?? DEFAULT_THEME_KEY;
+    this.autoNotesKey = opts.autoNotesKey ?? DEFAULT_AUTO_NOTES_KEY;
     this.difficulty = opts.difficulty ?? DEFAULT_DIFFICULTY;
     this.best = loadBest(this.storage, this.bestKey);
 
@@ -138,6 +147,14 @@ export class Sudoku {
     this.theme = opts.theme === undefined ? (persistedTheme ?? DEFAULT_THEME) : normalizeTheme(opts.theme);
     if (opts.theme !== undefined && this.theme !== persistedTheme) {
       writeTheme(this.storage, this.themeKey, this.theme);
+    }
+
+    // 自动候选：显式传入 > 持久值 > false。开启时的候选灌入由 startNewGame /
+    // loadFromSave 里的 refreshAutoNotes() 负责，这里只定下开关本身。
+    const persistedAuto = loadAutoNotes(this.storage, this.autoNotesKey);
+    this.autoNotes = opts.autoNotes === undefined ? (persistedAuto ?? false) : opts.autoNotes === true;
+    if (opts.autoNotes !== undefined && this.autoNotes !== persistedAuto) {
+      writeAutoNotes(this.storage, this.autoNotesKey, this.autoNotes);
     }
 
     this.fixedPuzzle = opts.puzzle ? cloneGrid(opts.puzzle) : null;
@@ -186,7 +203,8 @@ export class Sudoku {
       mistakeCount: this.mistakeCount,
       moveCount: this.moveCount,
       historySize: this.history.length,
-      theme: this.theme
+      theme: this.theme,
+      autoNotes: this.autoNotes
     };
   }
 
@@ -230,6 +248,28 @@ export class Sudoku {
     return true;
   }
 
+  /** 自动候选笔记是否开启。 */
+  getAutoNotes(): boolean {
+    return this.autoNotes;
+  }
+
+  /**
+   * 开关自动候选并落 `autoNotesKey`。返回 `false` = 传入不是布尔值（状态不动、不通知）。
+   *
+   * 与 `setTheme` 同理不走 `commit()`：偏好不该进对局存档，也不该进 undo 历史。
+   * 关闭时**保留**已在盘面上的笔记（不做破坏性清空）——自动与手写同处一个通道，
+   * 引擎已无法分辨哪条是谁写的，宁可留下也不误删玩家手写的内容；要清可逐格擦。
+   */
+  setAutoNotes(next: boolean): boolean {
+    if (typeof next !== 'boolean') return false;
+    if (next === this.autoNotes) return true;
+    this.autoNotes = next;
+    writeAutoNotes(this.storage, this.autoNotesKey, next);
+    if (next) this.refreshAutoNotes();
+    this.notify();
+    return true;
+  }
+
   canUndo(): boolean {
     return this.history.length > 0;
   }
@@ -258,6 +298,7 @@ export class Sudoku {
     setCell(this.grid, sel.row, sel.col, digit);
     const notesRow = this.notes[sel.row];
     if (notesRow) notesRow[sel.col] = []; // 有值即清空该格笔记
+    this.refreshAutoNotes(); // 盘面变了 → 候选整体重算（自动模式下）
     this.moveCount++;
     if (!isSafe(this.grid, sel.row, sel.col, digit)) this.mistakeCount++;
     this.checkWin();
@@ -280,6 +321,7 @@ export class Sudoku {
     this.ensureStarted(); // 擦掉东西同样算开始作答
     setCell(this.grid, sel.row, sel.col, 0);
     if (notesRow) notesRow[sel.col] = [];
+    this.refreshAutoNotes(); // 空格重新有了候选
     if (hadValue) this.moveCount++; // 擦掉一个「值」算一步；纯擦笔记不计步
     this.commit();
     return true;
@@ -325,6 +367,7 @@ export class Sudoku {
     setCell(this.grid, target.row, target.col, answer);
     const notesRow = this.notes[target.row];
     if (notesRow) notesRow[target.col] = [];
+    this.refreshAutoNotes(); // 提示也是盘面变化
     this.selected = target;
     this.hintCount++;
     this.moveCount++;
@@ -388,6 +431,7 @@ export class Sudoku {
     this.givenMask = maskFromPuzzle(this.puzzle);
     this.grid = cloneGrid(this.puzzle);
     this.notes = emptyNotes();
+    this.refreshAutoNotes(); // 自动候选开启时，新局一开局就有候选（但不因此起表）
     this.selected = firstEmpty(this.grid);
     this.status = 'playing';
     this.hintCount = 0;
@@ -407,6 +451,23 @@ export class Sudoku {
     this.started = true;
     this.baseMs = 0;
     this.origin = this.clock();
+  }
+
+  /**
+   * 按当前盘面重算所有空格的候选（仅在自动候选开启时动作）。
+   *
+   * 三条刻意的边界：
+   * 1. 不碰 `ensureStarted()` —— 候选是引擎派生态，不是玩家动手，绝不能让它起表；
+   * 2. 写的是与手写笔记同一个 `notes` 通道（用户已确认的取舍），所以在自动模式下，
+   *    玩家手改的那条会在下一次盘面变化时被这里覆盖；
+   * 3. 不动 `moveCount`（步数仍只统计填数与擦掉一个值）。
+   */
+  private refreshAutoNotes(): void {
+    if (!this.autoNotes) return;
+    for (const [r, c] of emptyCells(this.grid)) {
+      const row = this.notes[r];
+      if (row) row[c] = candidates(this.grid, r, c);
+    }
   }
 
   private elapsedMs(): number {
@@ -463,6 +524,8 @@ export class Sudoku {
   private restoreSnapshot(s: Snapshot): void {
     this.grid = cloneGrid(s.grid);
     this.notes = cloneNotes(s.notes);
+    // undo 也是盘面变化：自动候选开着就按回退后的盘面重算（偏好不进 undo，故不还原它）。
+    this.refreshAutoNotes();
     this.selected = s.selected ? { ...s.selected } : null;
     this.status = s.status;
     this.hintCount = s.hintCount;
@@ -484,6 +547,7 @@ export class Sudoku {
     this.givenMask = maskFromPuzzle(this.puzzle);
     this.grid = cloneGrid(save.grid);
     this.notes = save.notes ? cloneNotes(save.notes) : emptyNotes();
+    this.refreshAutoNotes();
     this.status = save.status === 'won' ? 'won' : 'playing';
     this.hintCount = numberOr(save.hintCount, 0);
     this.mistakeCount = numberOr(save.mistakeCount, 0);
@@ -493,8 +557,10 @@ export class Sudoku {
     const elapsed = numberOr(save.elapsedMs, 0);
     // 续档时按局面推定是否已起表：通关 / 已有步数 / 有用时 / 留有笔记 → 已起表；
     // 否则（全新题面、只选中没动过）继续等到首次改动局面才走表。
-    const dirty = this.moveCount > 0 || elapsed > 0 || hasAnyNotes(this.notes);
-    this.started = this.status === 'won' || dirty;
+    // 「留有笔记」这条证据**只在自动候选关闭时成立**：自动模式下人人都有一盘候选，
+    // 拿它当「已动手」会让计时在玩家什么都没做时就走起来。
+    const evidenceOfPlay = this.moveCount > 0 || elapsed > 0 || (!this.autoNotes && hasAnyNotes(this.notes));
+    this.started = this.status === 'won' || evidenceOfPlay;
     if (this.status === 'won') {
       this.finalMs = elapsed;
       this.baseMs = elapsed;

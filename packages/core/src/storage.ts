@@ -18,6 +18,7 @@ export const SAVE_VERSION = 1 as const;
 export const DEFAULT_SAVE_KEY = 'game-sudoku:save';
 export const DEFAULT_BEST_KEY = 'game-sudoku:best';
 export const DEFAULT_THEME_KEY = 'game-sudoku:theme';
+export const DEFAULT_AUTO_NOTES_KEY = 'game-sudoku:auto-notes';
 
 const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
 
@@ -140,6 +141,40 @@ export function writeTheme(storage: SaveStorage | null, key: string, theme: Sudo
 }
 
 export function clearTheme(storage: SaveStorage | null, key: string): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * 自动候选笔记开关的持久化（与 theme 同构：独立键、JSON 存布尔）。
+ * 没存过时返回 null，让上层区分「用户没表过态」与「用户关掉了」。
+ */
+export function loadAutoNotes(storage: SaveStorage | null, key: string): boolean | null {
+  if (!storage) return null;
+  const raw = storage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'boolean' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeAutoNotes(storage: SaveStorage | null, key: string, value: boolean): void {
+  if (!storage) return;
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* quota / 隐私模式静默忽略 */
+  }
+}
+
+export function clearAutoNotes(storage: SaveStorage | null, key: string): void {
   if (!storage) return;
   try {
     storage.removeItem(key);

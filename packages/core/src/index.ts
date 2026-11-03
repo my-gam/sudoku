@@ -53,18 +53,22 @@ export {
   DEFAULT_BEST_KEY,
   DEFAULT_SAVE_KEY,
   DEFAULT_THEME_KEY,
+  DEFAULT_AUTO_NOTES_KEY,
   SAVE_VERSION,
   clearSave,
   clearTheme,
+  clearAutoNotes,
   emptyBestTimes,
   isSerializedSave,
   loadBest,
   loadSave,
   loadTheme,
+  loadAutoNotes,
   tryGetGlobalStorage,
   writeBest,
   writeSave,
-  writeTheme
+  writeTheme,
+  writeAutoNotes
 } from './storage';
 
 export type {
