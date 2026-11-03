@@ -42,6 +42,9 @@
  *   规则顺序是这套配色能成立的前提，全部由 test/theme.test.ts 盯住。
  * - 冲突格红底；空格用 .cell-notes 3×3 迷你格画铅笔标记（笔记只出现在空格，与两类淡底
  *   结构互斥）。尺寸自适应：容器宽度决定一切，clamp() 缩放，320px～520px 视觉合理。
+ * - 落子弹跳：引擎在 GameState.lastPop 里给出「哪格刚落子 + 递增 seq」，UI 把 is-pop 加在
+ *   格子上，动画挂在数字层 .cell-value（缩放格子会被 box 的 overflow 裁切外圈）。幅度与时段
+ *   是 --sudoku-pop-scale / --sudoku-pop-duration 两个可调变量，改手感只动这两处。
  * - prefers-reduced-motion 下关过渡/动画。
  */
 
@@ -92,11 +95,13 @@
   --sudoku-danger-text: #ffb3b3;
   --sudoku-overlay-bg: rgba(255, 255, 255, 0.86);
 
-  /* 几何 */
+  /* 几何与动效（四档同值，但仍要逐档定义 —— 契约测试要求每个预设都是全集） */
   --sudoku-board-size: min(92vw, 460px);
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 1px;
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
+  --sudoku-pop-scale: 1.12;
+  --sudoku-pop-duration: 160ms;
 }
 
 /* ---------- 深色 ---------- */
@@ -142,6 +147,8 @@
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 1px;
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
+  --sudoku-pop-scale: 1.12;
+  --sudoku-pop-duration: 160ms;
 }
 
 /* ---------- 高对比：强光与低视力场景 ---------- */
@@ -188,6 +195,8 @@
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 2px;
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
+  --sudoku-pop-scale: 1.12;
+  --sudoku-pop-duration: 160ms;
 }
 
 /* ---------- 纸质暖色 ---------- */
@@ -232,6 +241,8 @@
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 1px;
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
+  --sudoku-pop-scale: 1.12;
+  --sudoku-pop-duration: 160ms;
 }
 
 /* ==========================================================================
@@ -276,6 +287,8 @@
   --box-gap: var(--sudoku-box-gap);
   --cell-gap: var(--sudoku-cell-gap);
   --radius: var(--sudoku-radius);
+  --pop-scale: var(--sudoku-pop-scale);
+  --pop-duration: var(--sudoku-pop-duration);
 }
 
 /* ==========================================================================
@@ -657,12 +670,16 @@
 
 @keyframes game-sudoku-pop {
   0% { transform: scale(1); }
-  50% { transform: scale(1.18); }
+  50% { transform: scale(var(--pop-scale)); }
   100% { transform: scale(1); }
 }
 
-.game-sudoku-cell.is-pop {
-  animation: game-sudoku-pop 200ms ease-out;
+/* 落子弹跳只作用于**数字本体**（.cell-value），不是格子：格子缩放会被
+   .game-sudoku-box 的 overflow: hidden 裁掉外圈格子的边角（81 格里约三分之一），
+   看起来「有的格子弹、有的被切一半」。数字 18px 弹到约 20px 始终在格内，零溢出。
+   类由 UI 加在格子上（is-pop），动画挂在里面的数字层上。 */
+.game-sudoku-cell.is-pop .cell-value {
+  animation: game-sudoku-pop var(--pop-duration) ease-out;
 }
 
 /* 窄屏：给定数字单独抬大约半档（360px 屏约 18px，而玩家数字 16.5px）。
@@ -678,7 +695,7 @@
   .game-sudoku-overlay {
     transition: none;
   }
-  .game-sudoku-cell.is-pop {
+  .game-sudoku-cell.is-pop .cell-value {
     animation: none;
   }
 }

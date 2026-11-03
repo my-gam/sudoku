@@ -75,6 +75,14 @@ export interface GameState {
    * 开启时 `notes` 由引擎按盘面重算（**同一通道**，手写笔记会在下一次重算时被覆盖）。
    */
   autoNotes: boolean;
+  /**
+   * 最近一次「落子」的格子与递增序号，供 UI 播落子弹跳动画。
+   *
+   * 只在 `input` / `hint` 成功写入数字时更新（擦除、撤销、手写笔记都不落子）。
+   * 带 `seq` 是因为同一格连续填两次，坐标不变但动画要重播 —— UI 用 seq 变化作为触发键。
+   * 刻意不进存档：续档/刷新时不该凭空弹一下；也不进 undo 快照（撤销不回退动画）。
+   */
+  lastPop: { row: number; col: number; seq: number } | null;
 }
 
 /** 一局的可回退快照（不含派生态与计时，undo 时整体还原）。 */

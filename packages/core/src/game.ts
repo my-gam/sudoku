@@ -125,6 +125,9 @@ export class Sudoku {
   // 主题与自动候选都是偏好：局外状态，不进存档也不进 undo 历史，各自落在独立键。
   private theme: SudokuTheme;
   private autoNotes: boolean;
+  // 落子动画状态。seq 只增不减，且不入存档 —— 续档刷新时不该凭空弹一下。
+  private popSeq = 0;
+  private lastPop: { row: number; col: number; seq: number } | null = null;
 
   private listeners = new Set<(state: GameState) => void>();
   private notifying = false;
@@ -204,7 +207,8 @@ export class Sudoku {
       moveCount: this.moveCount,
       historySize: this.history.length,
       theme: this.theme,
-      autoNotes: this.autoNotes
+      autoNotes: this.autoNotes,
+      lastPop: this.lastPop
     };
   }
 
@@ -299,6 +303,7 @@ export class Sudoku {
     const notesRow = this.notes[sel.row];
     if (notesRow) notesRow[sel.col] = []; // 有值即清空该格笔记
     this.refreshAutoNotes(); // 盘面变了 → 候选整体重算（自动模式下）
+    this.markPop(sel.row, sel.col); // 落子动画：同一格连填两次也要重播，故带 seq
     this.moveCount++;
     if (!isSafe(this.grid, sel.row, sel.col, digit)) this.mistakeCount++;
     this.checkWin();
@@ -368,6 +373,7 @@ export class Sudoku {
     const notesRow = this.notes[target.row];
     if (notesRow) notesRow[target.col] = [];
     this.refreshAutoNotes(); // 提示也是盘面变化
+    this.markPop(target.row, target.col); // 提示落子同样弹一下，否则像按钮没生效
     this.selected = target;
     this.hintCount++;
     this.moveCount++;
@@ -432,6 +438,7 @@ export class Sudoku {
     this.grid = cloneGrid(this.puzzle);
     this.notes = emptyNotes();
     this.refreshAutoNotes(); // 自动候选开启时，新局一开局就有候选（但不因此起表）
+    this.lastPop = null; // 新棋盘不带着上一局的落子动画
     this.selected = firstEmpty(this.grid);
     this.status = 'playing';
     this.hintCount = 0;
@@ -451,6 +458,15 @@ export class Sudoku {
     this.started = true;
     this.baseMs = 0;
     this.origin = this.clock();
+  }
+
+  /**
+   * 标一次「落子」。由 input / hint 在真正写入数字后调用（擦除、撤销、手写笔记都不算）。
+   * 必须在 commit/notify 之前，保证订阅者拿到的同一份快照里既有新数字也有 lastPop。
+   */
+  private markPop(row: number, col: number): void {
+    this.popSeq += 1;
+    this.lastPop = { row, col, seq: this.popSeq };
   }
 
   /**
@@ -548,6 +564,7 @@ export class Sudoku {
     this.grid = cloneGrid(save.grid);
     this.notes = save.notes ? cloneNotes(save.notes) : emptyNotes();
     this.refreshAutoNotes();
+    this.lastPop = null; // 续档/刷新不该凭空弹一下：落子动画只在真正的 input/hint 后出现
     this.status = save.status === 'won' ? 'won' : 'playing';
     this.hintCount = numberOr(save.hintCount, 0);
     this.mistakeCount = numberOr(save.mistakeCount, 0);

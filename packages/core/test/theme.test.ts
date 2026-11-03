@@ -455,6 +455,53 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
   });
 });
 
+describe('落子弹跳动画契约', () => {
+  it('幅度与时段是可调 token，四档都给值且落在合理区间', () => {
+    for (const p of PRESETS) {
+      const d = declMap(p.rule);
+      const scale = Number(d.get('--sudoku-pop-scale'));
+      expect(scale, `${p.name} 缺 --sudoku-pop-scale`).not.toBe(NaN);
+      expect(scale > 1 && scale <= 1.3, `${p.name} 弹跳幅度不合理：${scale}`).toBe(true);
+      const raw = d.get('--sudoku-pop-duration') ?? '';
+      const ms = Number(raw.replace(/ms$/, ''));
+      expect(Number.isFinite(ms) && ms >= 80 && ms <= 400, `${p.name} 弹跳时长不合理：${raw}`).toBe(true);
+    }
+  });
+
+  it('动画挂在数字层 .cell-value，不挂格子（挂格子会被 box 的 overflow 裁掉外圈）', () => {
+    const rule = RULES.find((r) => r.selector === '.game-sudoku-cell.is-pop .cell-value');
+    if (!rule) throw new Error('缺少 .game-sudoku-cell.is-pop .cell-value 规则');
+    const animation = declMap(rule).get('animation') ?? '';
+    expect(animation).toContain('game-sudoku-pop');
+    expect(animation).toContain('var(--pop-duration)');
+    const regressed = RULES.filter(
+      (r) => r.selector === '.game-sudoku-cell.is-pop' && (declMap(r).get('animation') ?? '').includes('game-sudoku-pop')
+    );
+    expect(regressed, '动画回退到格子上，会重新引入边缘格裁切缺陷').toHaveLength(0);
+  });
+
+  it('keyframes 用 var(--pop-scale)，调手感只改 token', () => {
+    const block = /@keyframes game-sudoku-pop \{([\s\S]*?)\n\}/.exec(CSS);
+    if (!block) throw new Error('找不到 game-sudoku-pop 关键帧');
+    expect(block[1]).toContain('scale(var(--pop-scale))');
+    expect(block[1]).not.toContain('scale(1.18)'); // 旧硬编码值不该残留
+  });
+
+  it('解析层把两个动效 token 映射成短名，布局层不直读 --sudoku-*', () => {
+    const resolve = RULES.find((r) => r.selector === ':where(.game-sudoku)');
+    if (!resolve) throw new Error('找不到解析层规则');
+    const d = declMap(resolve);
+    expect(d.get('--pop-scale')).toBe('var(--sudoku-pop-scale)');
+    expect(d.get('--pop-duration')).toBe('var(--sudoku-pop-duration)');
+  });
+
+  it('prefers-reduced-motion 下弹跳关掉', () => {
+    const block = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/.exec(CSS);
+    if (!block) throw new Error('找不到 reduced-motion 块');
+    expect(block[1]).toContain('.game-sudoku-cell.is-pop .cell-value');
+  });
+});
+
 describe('themes.ts 档位解析', () => {
   it('SUDOKU_THEMES = 具体档 + auto', () => {
     expect(SUDOKU_THEMES).toEqual([...SUDOKU_DATA_THEMES, 'auto']);

@@ -449,6 +449,74 @@ describe('Sudoku 自动候选笔记（引擎派生态，默认关）', () => {
   });
 });
 
+describe('Sudoku 落子动画状态（lastPop）', () => {
+  it('input 成功后标落子；seq 递增，同一格连填两次也能重播', () => {
+    const g = newGame();
+    expect(g.getState().lastPop).toBe(null);
+    g.select(0, 2);
+    g.input(4);
+    const first = g.getState().lastPop;
+    expect(first).toEqual({ row: 0, col: 2, seq: 1 });
+    g.input(5); // 同一格再填一次
+    const second = g.getState().lastPop;
+    expect(second?.row).toBe(0);
+    expect(second?.col).toBe(2);
+    expect(second!.seq).toBeGreaterThan(first!.seq); // 坐标不变，靠 seq 触发重播
+  });
+
+  it('无效操作不标落子：给定格、同值重复', () => {
+    const g = newGame();
+    g.select(0, 0); // 题面给定 5
+    expect(g.input(1)).toBe(false);
+    expect(g.getState().lastPop).toBe(null);
+    g.select(0, 2);
+    g.input(4);
+    const seq = g.getState().lastPop?.seq;
+    g.input(4); // 同值，无变化
+    expect(g.getState().lastPop?.seq).toBe(seq);
+  });
+
+  it('擦除 / 手写笔记 / 撤销都不落子', () => {
+    const g = newGame();
+    g.select(0, 2);
+    g.input(4);
+    const seq = g.getState().lastPop?.seq;
+    g.erase();
+    expect(g.getState().lastPop?.seq).toBe(seq);
+    g.toggleNote(3);
+    expect(g.getState().lastPop?.seq).toBe(seq);
+    g.undo();
+    expect(g.getState().lastPop?.seq).toBe(seq); // 撤销不回退动画状态
+  });
+
+  it('hint 落子同样标记（否则提示像没生效）', () => {
+    const g = newGame();
+    g.hint();
+    const pop = g.getState().lastPop;
+    expect(pop).not.toBe(null);
+    expect(g.getState().grid[pop!.row]?.[pop!.col]).not.toBe(0); // 指向的确实刚有了数字
+  });
+
+  it('newGame 与续档都清空 lastPop（刷新不该凭空弹一下）', () => {
+    const storage = memStorage();
+    const g1 = newGame({ storage, freshStart: true });
+    g1.select(0, 2);
+    g1.input(4);
+    expect(g1.getState().lastPop).not.toBe(null);
+    g1.newGame();
+    expect(g1.getState().lastPop).toBe(null);
+    // 再落一子并存档，重开实例时不应带回动画
+    g1.select(0, 2);
+    g1.input(4);
+    const g2 = newGame({ storage });
+    expect(g2.getState().grid[0]?.[2]).toBe(4); // 局面确实续上了
+    expect(g2.getState().lastPop).toBe(null);
+    // 且落子状态不该渗进对局存档
+    const raw = JSON.parse(storage.dump()['game-sudoku:save'] ?? 'null');
+    expect('lastPop' in (raw ?? {})).toBe(false);
+  });
+});
+
 describe('Sudoku 主题偏好（引擎持有，不是组件属性）', () => {
   it('无 storage 无 opts 时回落 light，且不抛错', () => {
     const g = newGame();
