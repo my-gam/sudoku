@@ -37,6 +37,8 @@ unsub();
   `solution` / `undoLimit`。默认 `difficulty:'easy'` 现场生成唯一解题。
 - `game.subscribe(fn): () => void` — 注册即收一次快照，返回退订函数。
 - `game.getState()` — `GameState` 深拷贝快照；`getGrid()` / `getPuzzle()` / `getSolution()`。
+  其中 `lastPop: { row, col, seq } | null` 是「最近一次落子」，供 UI 播弹跳动画（只由
+  `input` / `hint` 成功写数更新；`seq` 递增让同一格连填两次也能重播；不进存档也不进 undo）。
 - 主题：`getTheme()` / `setTheme(next): boolean` / `getEffectiveTheme(prefersDark?)`，
   档位也在 `GameState.theme` 里。详见下面「主题与样式契约」。
 - 自动候选：`getAutoNotes()` / `setAutoNotes(next): boolean`，开关在 `GameState.autoNotes`。
@@ -108,7 +110,9 @@ unsub();
 `--sudoku-on-accent` / `--sudoku-focus-ring`；控件 `--sudoku-chip-bg` / `--sudoku-button-bg` /
 `--sudoku-button-bg-hover` / `--sudoku-pad-bg` / `--sudoku-pad-bg-hover` / `--sudoku-pad-text` /
 `--sudoku-stat-text` / `--sudoku-danger-text` / `--sudoku-overlay-bg`；几何 `--sudoku-board-size` /
-`--sudoku-box-gap` / `--sudoku-cell-gap` / `--sudoku-radius`。
+`--sudoku-box-gap` / `--sudoku-cell-gap` / `--sudoku-radius`；动效 `--sudoku-pop-scale`（落子弹跳
+幅度，默认 1.12）/ `--sudoku-pop-duration`（时长，默认 160ms）。弹跳只作用于数字层
+`.cell-value`，不缩放格子——缩放格子会被 `.game-sudoku-box` 的 `overflow: hidden` 裁掉外圈格子的边角。
 
 **题面数字与玩家数字为什么长这样**：给定 = 中性淡底上的墨色粗字，玩家 = 实心色块上的反白字。
 原因是个数学事实——同一张浅底上，两个颜色若都要过 4.5:1（AA 正文），彼此最多差约 1.28:1，

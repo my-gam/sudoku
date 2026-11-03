@@ -17,7 +17,7 @@
 
 - **技术栈**：TypeScript 7（Go-native tsgo）· Vite 8（Rolldown）· Vue 3.5 · React 19（peerDep 兼容 18.2+）· Vitest 5
 - **包结构**：`packages/core` + `packages/vue` + `packages/react`，pnpm workspace；`playground/` 是三 tab 演示页（Vanilla / Vue / React）。
-- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **145 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约、自动候选与边界。
+- **纯 TS**：全项目 `strict` + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`；core 单测 **155 条**，覆盖棋盘、求解、生成、状态机、存档、订阅、主题契约、自动候选与边界。
 - **自动候选**（可选辅助，默认关）：`game.setAutoNotes(true)` 让引擎按盘面把候选数灌进笔记并随盘面重算，与主题同为引擎偏好、独立持久化。默认关的理由是 easy 档平均每格只剩 1.9 个候选（单候选即答案），开着会把玩法退化成"找单候选"。
 - **真·引擎**：回溯求解器（MRV 启发）、唯一解题生成器（填盘 + 挖洞 + `countSolutions` 校验）、`Sudoku` 状态机（选格/填数/擦除/笔记/提示/撤销/计时/分难度最佳）。
 - **主题**：样式全走 `--sudoku-*` 契约层，内置 light / dark / high-contrast / sepia 四档。档位由**引擎持有**（`game.setTheme()` / `GameState.theme`，独立持久化在 `game-sudoku:theme`），组件 `theme` 属性只是初始值/受控覆盖，纯 vanilla 与 IIFE 宿主同样能用，逐色可覆盖。
@@ -41,7 +41,7 @@ pnpm dev            # 起 playground，默认 http://127.0.0.1:5173
 pnpm build        # 三包 vite lib（core 四格式；vue/react ESM+CSS+DTS）
 pnpm verify:dist  # 断言 11 个必需产物存在且非 0 字节（防 --filter 空跑假绿）
 pnpm typecheck    # core / vue / react 全量 tsc --noEmit
-pnpm test         # core 单测（145 条）
+pnpm test         # core 单测（155 条）
 node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 ```
 
@@ -54,7 +54,7 @@ node tools/pages.mjs  # 本地跑一遍 Pages 构建 + 零断链自检
 
 ## 玩法
 
-- 点格子选中（或用方向键移动），按数字 1-9 / 点数字面板填入；`N` 切铅笔笔记，`Backspace` 擦除。
+- 点格子选中（或用方向键移动），按数字 1-9 / 点数字面板填入；`N` 切铅笔笔记，`Backspace` 擦除。填进去的数字会**弹一下**（1.12 / 160ms，走 `--sudoku-pop-*` 两个变量；`prefers-reduced-motion` 下自动关掉）。
 - 工具栏的「候选」可让引擎按盘面自动填候选数（**默认关**：easy 档平均每格只剩 1.9 个候选，很多格等于直接标答案；开着时手改的笔记会在下一次盘面变化时被重算覆盖）。
 - 题面给定数字（中性淡底上的墨色粗字）不可改；填错（与同行/列/宫重复）会标红并计一次错误，但不强制拦下。
 - 填满且无冲突即通关，按难度记录最佳用时（用时从第一次真正动手起算：填数、擦除、记笔记、提示都算开始游戏，只有选格浏览不计时）。「提示」填对一格，「撤销」回退，难度条即时重开一局。
@@ -159,6 +159,7 @@ console.log(countSolutions(puzzle) === 1, solve(puzzle)); // true, 与 solution 
 - `subscribe/getState/getGrid/getPuzzle/getSolution` + `select/input/erase/toggleNote/hint/newGame/undo/canUndo/clearSaved`
 - 主题：`getTheme()` / `setTheme(next): boolean` / `getEffectiveTheme(prefersDark?)`；档位也在 `GameState.theme`
 - 自动候选：`getAutoNotes()` / `setAutoNotes(next): boolean`；开关在 `GameState.autoNotes`，默认关
+- 落子动画：`GameState.lastPop = { row, col, seq }`，只由 `input` / `hint` 更新，UI 靠 `seq` 变化重播
 - 档位与工具：`SUDOKU_THEMES` / `SUDOKU_DATA_THEMES` / `DEFAULT_THEME` / `isTheme` / `normalizeTheme` /
   `resolveTheme` / `loadTheme` / `writeTheme` / `clearTheme` / `DEFAULT_THEME_KEY` /
   `loadAutoNotes` / `writeAutoNotes` / `clearAutoNotes` / `DEFAULT_AUTO_NOTES_KEY`
@@ -249,7 +250,7 @@ sudoku/
 │   ├── core/   @my-games/sudoku-core  纯 TS 引擎
 │   │   ├── src/{types,board,solver,generator,game,storage,themes,index}.ts
 │   │   ├── src/style.css                 单份视觉 + 主题契约层，Vue/React 共享
-│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  145 单测
+│   │   └── test/{board,solver,generator,game,storage,index,theme}.test.ts  155 单测
 │   ├── vue/    @my-games/sudoku-vue   GameSudoku.vue + useGame + instance
 │   └── react/  @my-games/sudoku-react GameSudoku.tsx + useGame
 ├── playground/ Vite 三 tab 演示（Vanilla / Vue / React）
@@ -303,7 +304,7 @@ tag↔版本一致）→ `pnpm -r publish --access public --provenance`（OIDC T
 - **`auto` 归适配层**：放进 CSS 会把深色那叠变量抄第二遍（`dark` 与「auto 且系统为深」生效条件不同，
   规则体无法共享），所以组件用 `matchMedia` 解析。副作用是深色系统下首帧有一次浅→深闪变。
 - **冲突不拦填**：允许把冲突值填进去并标红 + 计错误，贴近真实数独 App（区别于「非法直接拒绝」）。
-- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 145 条用例；适配层靠 `typecheck + build` 覆盖，
+- **适配层无单测**：与 2048 模板一致，回归主要靠 core 的 155 条用例；适配层靠 `typecheck + build` 覆盖，
   是否补 `@vue/test-utils` / `@testing-library/react` 是独立的、需新增依赖的决策。
 - **计时非高精度**：`elapsedSeconds` 靠注入 `clock` 差值，标签页挂起不计；够休闲游戏用。
 
