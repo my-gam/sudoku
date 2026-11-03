@@ -229,7 +229,9 @@ export function App() {
           <code>@my-games/sudoku-core</code> 引擎所有（<code>game.setTheme()</code> /
           <code>GameState.theme</code>），落在独立的 <code>game-sudoku:theme</code> 键里，
           <b>刷新后保持</b>；三个 tab 共享这一份偏好。<code>auto</code> = 跟随系统，由
-          <code>matchMedia</code> 解析成具体档（右侧回显真正生效的值）。
+          <code>matchMedia</code> 解析成具体档（右侧回显真正生效的值）。棋盘工具栏里的「候选」是
+          另一项引擎偏好（<code>game.setAutoNotes()</code>，落在 <code>game-sudoku:auto-notes</code>），
+          同样三 tab 共享、刷新后保持，所以顶部没再放一个重复开关。
         </p>
       </details>
 

@@ -38,6 +38,11 @@ export interface GameSudokuProps {
    * `light`。`'auto'` 由本组件用 matchMedia 解析成 light / dark 并跟随系统变化。
    */
   theme?: SudokuTheme;
+  /**
+   * 初始 / 受控的自动候选开关。不传则由引擎读它自己的持久化偏好（`game-sudoku:auto-notes`），
+   * 最终回落 `false`。开启后引擎按盘面把候选灌进 `notes`，与手写笔记同一通道。
+   */
+  autoNotes?: boolean;
   onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (payload: { difficulty: Difficulty; seconds: number }) => void;
 }
@@ -54,6 +59,9 @@ export interface GameSudokuHandle {
   setTheme(next: SudokuTheme): boolean;
   /** 引擎当前的请求档（可能是 'auto'）。 */
   getTheme(): SudokuTheme;
+  /** 开关自动候选（引擎偏好，独立键持久化）。返回 false = 传入不是布尔。 */
+  setAutoNotes(next: boolean): boolean;
+  getAutoNotes(): boolean;
 }
 
 const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -127,6 +135,7 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     className,
     showHint = false,
     theme,
+    autoNotes,
     onDigit,
     onSolved
   } = props;
@@ -137,7 +146,8 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
     saveKey,
     bestKey,
     freshStart,
-    theme
+    theme,
+    autoNotes
   });
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -159,6 +169,9 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
   useEffect(() => {
     if (theme !== undefined) game.setTheme(theme);
   }, [theme, game]);
+  useEffect(() => {
+    if (autoNotes !== undefined) game.setAutoNotes(autoNotes);
+  }, [autoNotes, game]);
   // 用时每秒刷新：core 只在操作时推快照，tick 触发重绘后由 game.getState() 读实时值。
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -246,7 +259,9 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
       newGame,
       undo,
       setTheme: (next: SudokuTheme): boolean => game.setTheme(next),
-      getTheme: (): SudokuTheme => game.getTheme()
+      getTheme: (): SudokuTheme => game.getTheme(),
+      setAutoNotes: (next: boolean): boolean => game.setAutoNotes(next),
+      getAutoNotes: (): boolean => game.getAutoNotes()
     }),
     [select, input, erase, toggleNote, hint, newGame, undo, game]
   );
@@ -323,6 +338,16 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
             onClick={() => setNoteMode((v) => !v)}
           >
             笔记 {noteMode ? '开' : '关'}
+          </button>
+          <button
+            className={`game-sudoku-button${state.autoNotes ? ' is-toggled' : ''}`}
+            type="button"
+            aria-pressed={state.autoNotes}
+            disabled={won}
+            title="自动按盘面填候选数（与手写笔记同一通道，会被下一次重算覆盖）"
+            onClick={() => game.setAutoNotes(!state.autoNotes)}
+          >
+            候选 {state.autoNotes ? '开' : '关'}
           </button>
           <button
             className="game-sudoku-button"

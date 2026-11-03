@@ -16,4 +16,7 @@ export interface GameSudokuInstance {
   setTheme(next: SudokuTheme): boolean;
   /** 引擎当前的请求档（可能是 'auto'）。 */
   getTheme(): SudokuTheme;
+  /** 开关自动候选（引擎偏好，独立键持久化）。返回 false = 传入不是布尔。 */
+  setAutoNotes(next: boolean): boolean;
+  getAutoNotes(): boolean;
 }

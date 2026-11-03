@@ -25,6 +25,7 @@ export interface VanillaDemoProps {
   autofocus?: boolean;
   showHint?: boolean;
   theme?: SudokuTheme;
+  autoNotes?: boolean;
   onDigit?: (e: { digit: Digit; changed: boolean; row: number; col: number }) => void;
   onSolved?: (e: { difficulty: Difficulty; seconds: number }) => void;
 }
@@ -49,6 +50,7 @@ export function VanillaDemo({
   autofocus = true,
   showHint = false,
   theme,
+  autoNotes,
   onDigit,
   onSolved
 }: VanillaDemoProps) {
@@ -67,6 +69,10 @@ export function VanillaDemo({
   useEffect(() => {
     if (theme !== undefined) gameRef.current?.setTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (autoNotes !== undefined) gameRef.current?.setAutoNotes(autoNotes);
+  }, [autoNotes]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -114,12 +120,14 @@ export function VanillaDemo({
       </div>
       <div class="game-sudoku-actions">
         <button class="game-sudoku-button" type="button" data-role="note">笔记 关</button>
+        <button class="game-sudoku-button" type="button" data-role="auto" title="自动按盘面填候选数（与手写笔记同一通道）">候选 关</button>
         <button class="game-sudoku-button" type="button" data-role="undo" disabled>撤销</button>
         ${showHint ? '<button class="game-sudoku-button" type="button" data-role="hint">提示</button>' : ''}
         <button class="game-sudoku-button is-primary" type="button" data-role="new">新游戏</button>
       </div>`;
     host.appendChild(toolbar);
     const noteBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="note"]');
+    const autoBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="auto"]');
     const undoBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="undo"]');
     const hintBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="hint"]');
     const newBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="new"]');
@@ -164,7 +172,7 @@ export function VanillaDemo({
     // ---- 引擎 ----
     // 这里的 theme 只作「初始档位」：本 effect 的依赖刻意不含 theme，后续变更由上面那个
     // push effect 走 game.setTheme()，避免换主题重建整块棋盘。
-    const game = new Sudoku({ saveKey, bestKey, difficulty, theme });
+    const game = new Sudoku({ saveKey, bestKey, difficulty, theme, autoNotes });
     gameRef.current = game;
 
     // data-theme 由引擎档位解析而来（auto → light/dark 靠宿主喂进来的 matchMedia 结果）。
@@ -182,6 +190,12 @@ export function VanillaDemo({
       if (noteBtn) {
         noteBtn.textContent = `笔记 ${noteMode ? '开' : '关'}`;
         noteBtn.classList.toggle('is-toggled', noteMode);
+      }
+      if (autoBtn) {
+        // 读引擎状态而不是本地变量：候选开关的真相在 core（setAutoNotes 会推快照过来）。
+        autoBtn.textContent = `候选 ${state.autoNotes ? '开' : '关'}`;
+        autoBtn.classList.toggle('is-toggled', state.autoNotes);
+        autoBtn.setAttribute('aria-pressed', String(state.autoNotes));
       }
 
       // 重画 9 个 box 的 cell
@@ -281,6 +295,7 @@ export function VanillaDemo({
       noteMode = !noteMode;
       render(game.getState());
     });
+    autoBtn?.addEventListener('click', () => game.setAutoNotes(!game.getAutoNotes()));
     undoBtn?.addEventListener('click', () => game.undo());
     hintBtn?.addEventListener('click', () => game.hint());
     const startNew = (): void => game.newGame();

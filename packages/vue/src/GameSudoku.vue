@@ -30,6 +30,8 @@ interface Props {
   showHint?: boolean;
   /** 初始 / 受控主题。不传则由引擎读持久化偏好，最终回落 `light`。 */
   theme?: SudokuTheme;
+  /** 初始 / 受控自动候选开关。不传则由引擎读持久化偏好，最终回落 false（关）。 */
+  autoNotes?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -42,7 +44,8 @@ const props = withDefaults(defineProps<Props>(), {
   title: '数独',
   showPad: true,
   showHint: false,
-  theme: undefined
+  theme: undefined,
+  autoNotes: undefined
 });
 
 const emit = defineEmits<{
@@ -56,7 +59,8 @@ const { state, raw, select, input, erase, toggleNote, hint, newGame, undo } = us
   saveKey: props.saveKey,
   bestKey: props.bestKey,
   freshStart: props.freshStart,
-  theme: props.theme
+  theme: props.theme,
+  autoNotes: props.autoNotes
 });
 
 const boardEl = ref<HTMLDivElement | null>(null);
@@ -218,6 +222,14 @@ watch(
     if (next !== undefined) raw.setTheme(next);
   }
 );
+// 自动候选同理。注意按钮读的是 state.autoNotes（引擎真相），不是本地 ref ——
+// 否则宿主走 ref.setAutoNotes() 时按钮状态会与实际脱节。
+watch(
+  () => props.autoNotes,
+  (next) => {
+    if (next !== undefined) raw.setAutoNotes(next);
+  }
+);
 
 let lastStatus = state.value.status;
 watch(
@@ -262,7 +274,9 @@ defineExpose({
   undo,
   // 主题走引擎；这里包一层是为了保住 this（直接写 raw.setTheme 交出的是脱离实例的引用）。
   setTheme: (next: SudokuTheme): boolean => raw.setTheme(next),
-  getTheme: (): SudokuTheme => raw.getTheme()
+  getTheme: (): SudokuTheme => raw.getTheme(),
+  setAutoNotes: (next: boolean): boolean => raw.setAutoNotes(next),
+  getAutoNotes: (): boolean => raw.getAutoNotes()
 });
 </script>
 
@@ -311,6 +325,17 @@ defineExpose({
           @click="noteMode = !noteMode"
         >
           笔记 {{ noteMode ? '开' : '关' }}
+        </button>
+        <button
+          class="game-sudoku-button"
+          :class="{ 'is-toggled': state.autoNotes }"
+          type="button"
+          :aria-pressed="state.autoNotes"
+          :disabled="state.status === 'won'"
+          title="自动按盘面填候选数（与手写笔记同一通道，会被下一次重算覆盖）"
+          @click="raw.setAutoNotes(!state.autoNotes)"
+        >
+          候选 {{ state.autoNotes ? '开' : '关' }}
         </button>
         <button
           class="game-sudoku-button"
