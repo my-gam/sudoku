@@ -97,6 +97,15 @@ function cellValueOf(state: GameState, row: number, col: number): number {
   return state.grid[row]?.[col] ?? 0;
 }
 
+/**
+ * 数字层的 key：落在同一格的第二次落子 seq 会变，React 便重建该节点，CSS 动画随之重播
+ * （类名不变时动画不会自己重来）。
+ */
+function popKeyOf(state: GameState, row: number, col: number): string {
+  const pop = state.lastPop;
+  return pop && pop.row === row && pop.col === col ? `pop-${pop.seq}` : 'value';
+}
+
 function cellClass(state: GameState, row: number, col: number): string {
   const v = cellValueOf(state, row, col);
   const given = state.givenMask[row]?.[col] ?? false;
@@ -105,6 +114,7 @@ function cellClass(state: GameState, row: number, col: number): string {
   if (given) cls.push('is-given');
   else if (v !== 0) cls.push('is-user');
   if (state.conflicts[row]?.[col]) cls.push('is-conflict');
+  if (state.lastPop && state.lastPop.row === row && state.lastPop.col === col) cls.push('is-pop');
   if (sel && sel.row === row && sel.col === col) {
     cls.push('is-selected');
   } else if (sel) {
@@ -282,7 +292,9 @@ function GameSudokuInner(props: GameSudokuProps, ref: Ref<GameSudokuHandle>) {
         onClick={() => select(row, col)}
       >
         {value !== 0 ? (
-          value
+          <span className="cell-value" key={popKeyOf(state, row, col)}>
+            {value}
+          </span>
         ) : (
           <div className="cell-notes">
             {PAD_DIGITS.map((d) => (

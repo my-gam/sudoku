@@ -31,6 +31,11 @@ export interface VanillaDemoProps {
 }
 
 const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+/**
+ * 落子弹跳类的存活窗口（ms）。必须大于 CSS 的 `--sudoku-pop-duration`（当前 160ms），
+ * 否则动画会被提前摘掉而不完整；改 CSS 时长时这里要一起看。
+ */
+const POP_CLEAR_MS = 240;
 const DIFFS: Array<{ key: Difficulty; label: string }> = [
   { key: 'easy', label: '简单' },
   { key: 'medium', label: '中等' },
@@ -174,6 +179,9 @@ export function VanillaDemo({
     // push effect 走 game.setTheme()，避免换主题重建整块棋盘。
     const game = new Sudoku({ saveKey, bestKey, difficulty, theme, autoNotes });
     gameRef.current = game;
+    let poppedSeq = 0;
+    let popTarget: { row: number; col: number } | null = null;
+    let popTimer = 0;
 
     // data-theme 由引擎档位解析而来（auto → light/dark 靠宿主喂进来的 matchMedia 结果）。
     const applyTheme = (next: SudokuTheme): void => {
@@ -183,6 +191,16 @@ export function VanillaDemo({
 
     const render = (state: GameState): void => {
       applyTheme(state.theme);
+      // 落子弹跳：vanilla 每次 render 都重建 cell 元素，所以 is-pop 不能常驻（1 秒心跳
+      // 重绘会让它反复重播）。只在 seq 变化的那一刻挂上，窗口过后自动摘掉。
+      if (state.lastPop && state.lastPop.seq !== poppedSeq) {
+        poppedSeq = state.lastPop.seq;
+        popTarget = { row: state.lastPop.row, col: state.lastPop.col };
+        window.clearTimeout(popTimer);
+        popTimer = window.setTimeout(() => {
+          popTarget = null;
+        }, POP_CLEAR_MS);
+      }
       if (timeEl) timeEl.textContent = formatTime(state.elapsedSeconds);
       if (bestEl) bestEl.textContent = state.bestSeconds === null ? '—' : formatTime(state.bestSeconds);
       if (mistakeEl) mistakeEl.textContent = String(state.mistakeCount);
@@ -206,7 +224,15 @@ export function VanillaDemo({
         for (let ci = 0; ci < 9; ci++) {
           const row = Math.floor(bi / 3) * 3 + Math.floor(ci / 3);
           const col = (bi % 3) * 3 + (ci % 3);
-          box.appendChild(buildCell(state, row, col, game));
+          box.appendChild(
+            buildCell(
+              state,
+              row,
+              col,
+              game,
+              !!popTarget && popTarget.row === row && popTarget.col === col
+            )
+          );
         }
       }
 
@@ -313,6 +339,7 @@ export function VanillaDemo({
       pad.removeEventListener('click', onPad);
       board.removeEventListener('click', onBoardClick);
       unsub();
+      window.clearTimeout(popTimer);
       gameRef.current = null;
       applyThemeRef.current = null;
     };
@@ -321,8 +348,14 @@ export function VanillaDemo({
   return <div ref={hostRef} className="game-sudoku vanilla-host" />;
 }
 
-/** 建一个 cell 元素（值或铅笔笔记），点击选中。 */
-function buildCell(state: GameState, row: number, col: number, game: Sudoku): HTMLElement {
+/** 建一个 cell 元素（值或铅笔笔记），点击选中。popping = 这一帧要播落子弹跳。 */
+function buildCell(
+  state: GameState,
+  row: number,
+  col: number,
+  game: Sudoku,
+  popping = false
+): HTMLElement {
   const cell = document.createElement('div');
   const value = state.grid[row]?.[col] ?? 0;
   const given = state.givenMask[row]?.[col] ?? false;
@@ -330,6 +363,7 @@ function buildCell(state: GameState, row: number, col: number, game: Sudoku): HT
   if (given) cls.push('is-given');
   else if (value !== 0) cls.push('is-user');
   if (state.conflicts[row]?.[col]) cls.push('is-conflict');
+  if (popping) cls.push('is-pop');
   const sel = state.selected;
   if (sel && sel.row === row && sel.col === col) cls.push('is-selected');
   else if (sel) {
@@ -344,7 +378,12 @@ function buildCell(state: GameState, row: number, col: number, game: Sudoku): HT
   cell.dataset.col = String(col);
 
   if (value !== 0) {
-    cell.textContent = String(value as Cell);
+    // 数字包一层 .cell-value：弹跳动画挂在这层而非格子（缩放格子会被 box 的
+    // overflow: hidden 裁掉外圈格子的边角）。
+    const valueEl = document.createElement('span');
+    valueEl.className = 'cell-value';
+    valueEl.textContent = String(value as Cell);
+    cell.appendChild(valueEl);
   } else {
     const notesWrap = document.createElement('div');
     notesWrap.className = 'cell-notes';

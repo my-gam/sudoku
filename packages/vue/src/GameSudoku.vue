@@ -125,6 +125,15 @@ function cellNotes(row: number, col: number): Digit[] {
   return cellValue(row, col) === 0 ? (state.value.notes[row]?.[col] ?? []) : [];
 }
 
+/**
+ * 数字层的 key：落在同一格上的第二次落子 seq 会变，Vue 便会重建该 span，
+ * CSS 动画随之重播（类名不变时动画不会自己重来）。
+ */
+function popKey(row: number, col: number): string {
+  const pop = state.value.lastPop;
+  return pop && pop.row === row && pop.col === col ? `pop-${pop.seq}` : 'value';
+}
+
 function cellClass(row: number, col: number): Record<string, boolean> {
   const s = state.value;
   const v = cellValue(row, col);
@@ -136,6 +145,7 @@ function cellClass(row: number, col: number): Record<string, boolean> {
     'is-user': !given && v !== 0,
     'is-conflict': !!s.conflicts[row]?.[col],
     'is-selected': !!sel && sel.row === row && sel.col === col,
+    'is-pop': !!s.lastPop && s.lastPop.row === row && s.lastPop.col === col,
     'is-peer': false,
     'is-same': false
   };
@@ -376,9 +386,11 @@ defineExpose({
           :data-col="cell.col"
           @click="select(cell.row, cell.col)"
         >
-          <template v-if="cellValue(cell.row, cell.col) !== 0">
-            {{ cellValue(cell.row, cell.col) }}
-          </template>
+          <span
+            v-if="cellValue(cell.row, cell.col) !== 0"
+            class="cell-value"
+            :key="popKey(cell.row, cell.col)"
+          >{{ cellValue(cell.row, cell.col) }}</span>
           <div v-else class="cell-notes">
             <span v-for="d in PAD_DIGITS" :key="d">{{
               cellNotes(cell.row, cell.col).includes(d) ? d : ''
