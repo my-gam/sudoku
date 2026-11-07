@@ -616,11 +616,6 @@
   cursor: not-allowed;
 }
 
-.game-sudoku-pad .is-active-mode {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
 .game-sudoku-overlay {
   position: absolute;
   inset: 0;
@@ -659,13 +654,6 @@
 .game-sudoku-overlay .row {
   display: flex;
   gap: 8px;
-}
-
-.game-sudoku-desc {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
 }
 
 @keyframes game-sudoku-pop {
