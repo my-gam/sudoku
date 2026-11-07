@@ -295,6 +295,20 @@ export function mount(target: HTMLElement, options: MountOptions = {}): SudokuCo
   let schemeQuery: MediaQueryList | null = null;
   let onSchemeChange: (() => void) | null = null;
 
+  // ---------- 数字拖拽（指针事件：鼠标 / 触摸 / 笔通用） ----------
+  // 用 Pointer Events 自己实现，而不是原生 HTML5 drag-and-drop：原生 DnD 在触屏（手机/平板）
+  // 上根本不触发，而数独大量在移动端玩；指针事件一套代码覆盖全平台。
+  const DRAG_THRESHOLD = 6; // 超过此位移才算「拖」，否则视为普通点按（保留点按填数）。
+  let dragDigit: Digit | null = null;
+  let dragActive = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragMoved = false; // 刚完成一次拖拽 → 抑制紧随其后的合成 click，防重复填数。
+  let dragSnap: GameState | null = null; // 拖拽起点抓一份快照，用于判断落点格是否可填。
+  let dragGhost: HTMLElement | null = null;
+  let dragSourceBtn: HTMLButtonElement | null = null;
+  let lastDropCell: HTMLDivElement | null = null;
+
   const prefersDark = (): boolean => (schemeQuery ? schemeQuery.matches : false);
 
   function applyTheme(state: GameState): void {
@@ -449,7 +463,18 @@ export function mount(target: HTMLElement, options: MountOptions = {}): SudokuCo
     if (!noteMode) onDigit?.({ digit: d, changed, row: sel?.row ?? -1, col: sel?.col ?? -1 });
   };
 
+  /** 拖拽落点：先选中目标格，再按当前模式填数 / 记笔记（复用 applyFill 的笔记模式判断）。 */
+  const dropFill = (r: number, c: number, d: Digit): void => {
+    game.select(r, c);
+    applyFill(d);
+  };
+
   const onPadClick = (ev: MouseEvent): void => {
+    if (dragMoved) {
+      // 刚完成一次拖拽，浏览器可能补发一次 click；丢弃它，否则会重复填数。
+      dragMoved = false;
+      return;
+    }
     const digit = (ev.target as HTMLElement).dataset?.digit;
     if (!digit) return;
     applyFill(Number(digit) as Digit);
@@ -490,10 +515,126 @@ export function mount(target: HTMLElement, options: MountOptions = {}): SudokuCo
     game.select(row, col);
   };
 
+  // ---------- 拖拽实现 ----------
+  /** 清掉拖拽期间产生的一切临时状态（ghost / 高亮 / 源按钮态 / 根节点态）。 */
+  const cleanupDrag = (): void => {
+    if (dragGhost) {
+      dragGhost.remove();
+      dragGhost = null;
+    }
+    if (lastDropCell) {
+      lastDropCell.classList.remove('is-drop-target');
+      lastDropCell = null;
+    }
+    if (dragSourceBtn) {
+      dragSourceBtn.classList.remove('is-drag-source');
+      dragSourceBtn = null;
+    }
+    root.classList.remove('is-dragging');
+  };
+
+  const onPadPointerDown = (ev: PointerEvent): void => {
+    if (dragDigit !== null) return; // 已有拖拽进行中（多指），忽略第二个起点。
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return; // 鼠标只接左键。
+    const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>('button[data-digit]');
+    if (!btn || !padEl?.contains(btn)) return;
+    dragDigit = Number(btn.dataset.digit) as Digit;
+    dragActive = false;
+    dragMoved = false;
+    dragStartX = ev.clientX;
+    dragStartY = ev.clientY;
+    dragSnap = game.getState(); // 落点是否可填只看给定掩码与通关态，拖拽过程中不会变。
+    dragSourceBtn = btn;
+  };
+
+  const startDrag = (): void => {
+    dragActive = true;
+    root.classList.add('is-dragging');
+    dragSourceBtn?.classList.add('is-drag-source');
+    const ghost = document.createElement('div');
+    ghost.className = 'game-sudoku-drag-ghost';
+    ghost.textContent = String(dragDigit);
+    document.body.appendChild(ghost);
+    dragGhost = ghost;
+  };
+
+  const moveGhost = (x: number, y: number): void => {
+    if (dragGhost) {
+      dragGhost.style.left = `${x}px`;
+      dragGhost.style.top = `${y}px`;
+    }
+  };
+
+  const hitCell = (x: number, y: number): HTMLDivElement | null => {
+    const el = document.elementFromPoint(x, y);
+    // ghost 自身 pointer-events:none，不会挡住探测；格内的 .cell-value / .cell-notes 也被 closest 跳过。
+    const cell = el?.closest<HTMLDivElement>('.game-sudoku-cell');
+    return cell ?? null;
+  };
+
+  const onPointerMove = (ev: PointerEvent): void => {
+    if (dragDigit === null) return;
+    if (!dragActive) {
+      if (
+        Math.abs(ev.clientX - dragStartX) < DRAG_THRESHOLD &&
+        Math.abs(ev.clientY - dragStartY) < DRAG_THRESHOLD
+      ) {
+        return; // 还没拖够距离 → 仍当点按，不抢 click。
+      }
+      startDrag();
+    }
+    moveGhost(ev.clientX, ev.clientY);
+    const cell = hitCell(ev.clientX, ev.clientY);
+    if (lastDropCell && lastDropCell !== cell) {
+      lastDropCell.classList.remove('is-drop-target');
+      lastDropCell = null;
+    }
+    if (cell && dragSnap && dragDigit !== null) {
+      const r = Number(cell.dataset.row);
+      const c = Number(cell.dataset.col);
+      // 只高亮「可落点」格：已通关或题面给定格不接填数，就不给落点指示，避免误导。
+      const droppable = dragSnap.status !== 'won' && !(dragSnap.givenMask[r]?.[c]);
+      if (droppable) {
+        cell.classList.add('is-drop-target');
+        lastDropCell = cell;
+      }
+    }
+  };
+
+  const onPointerUp = (ev: PointerEvent): void => {
+    if (dragDigit === null) return;
+    if (dragActive) {
+      const cell = hitCell(ev.clientX, ev.clientY);
+      if (cell && dragSnap && dragDigit !== null) {
+        const r = Number(cell.dataset.row);
+        const c = Number(cell.dataset.col);
+        const droppable = dragSnap.status !== 'won' && !(dragSnap.givenMask[r]?.[c]);
+        if (droppable) dropFill(r, c, dragDigit);
+      }
+      cleanupDrag();
+      dragMoved = true; // 抑制随后可能合成的 click，避免重复填数（由 onPadClick 消费后复位）。
+    }
+    dragDigit = null;
+    dragActive = false;
+    dragSnap = null;
+  };
+
+  const onPointerCancel = (): void => {
+    if (dragDigit === null) return;
+    cleanupDrag();
+    dragDigit = null;
+    dragActive = false;
+    dragSnap = null;
+  };
+
   const padEl = showPad ? root.querySelector<HTMLElement>('.game-sudoku-pad') : null;
   padEl?.addEventListener('click', onPadClick);
+  padEl?.addEventListener('pointerdown', onPadPointerDown);
   board.addEventListener('click', onBoardClick);
   window.addEventListener('keydown', onKey, { passive: false });
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
   noteBtn?.addEventListener('click', () => {
     noteMode = !noteMode;
     render(game.getState());
@@ -519,8 +660,13 @@ export function mount(target: HTMLElement, options: MountOptions = {}): SudokuCo
       window.clearInterval(timer);
       window.clearTimeout(popTimer);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
       padEl?.removeEventListener('click', onPadClick);
+      padEl?.removeEventListener('pointerdown', onPadPointerDown);
       board.removeEventListener('click', onBoardClick);
+      cleanupDrag();
       schemeQuery?.removeEventListener('change', onSchemeChange ?? (() => undefined));
       unsub();
       root.remove();

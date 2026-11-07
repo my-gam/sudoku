@@ -95,6 +95,9 @@
   --sudoku-danger-text: #ffb3b3;
   --sudoku-overlay-bg: rgba(255, 255, 255, 0.86);
 
+  /* 拖拽浮层数字的落影（所有主题同值：纯黑半透明，浅底上给浮起感；深色主题下浮层本身是亮色块，阴影不可见也无妨）。 */
+  --sudoku-ghost-shadow: rgba(0, 0, 0, 0.3);
+
   /* 几何与动效（四档同值，但仍要逐档定义 —— 契约测试要求每个预设都是全集） */
   --sudoku-board-size: min(92vw, 460px);
   --sudoku-box-gap: 3px;
@@ -156,6 +159,9 @@
   --sudoku-danger-text: #ff8f8f;
   --sudoku-overlay-bg: rgba(12, 17, 23, 0.86);
 
+  /* 拖拽浮层数字的落影（见浅色档注释，四档同值）。 */
+  --sudoku-ghost-shadow: rgba(0, 0, 0, 0.3);
+
   --sudoku-board-size: min(92vw, 460px);
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 1px;
@@ -215,6 +221,9 @@
   --sudoku-danger-text: #b00000;
   --sudoku-overlay-bg: rgba(0, 0, 0, 0.9);
 
+  /* 拖拽浮层数字的落影（见浅色档注释，四档同值）。 */
+  --sudoku-ghost-shadow: rgba(0, 0, 0, 0.3);
+
   --sudoku-board-size: min(92vw, 460px);
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 2px;
@@ -272,6 +281,9 @@
   --sudoku-danger-text: #ffc9bd;
   --sudoku-overlay-bg: rgba(246, 236, 217, 0.88);
 
+  /* 拖拽浮层数字的落影（见浅色档注释，四档同值）。 */
+  --sudoku-ghost-shadow: rgba(0, 0, 0, 0.3);
+
   --sudoku-board-size: min(92vw, 460px);
   --sudoku-box-gap: 3px;
   --sudoku-cell-gap: 1px;
@@ -328,6 +340,7 @@
   --stat-text: var(--sudoku-stat-text);
   --danger-text: var(--sudoku-danger-text);
   --overlay-bg: var(--sudoku-overlay-bg);
+  --ghost-shadow: var(--sudoku-ghost-shadow);
 
   --board-size: var(--sudoku-board-size);
   --box-gap: var(--sudoku-box-gap);
@@ -576,6 +589,14 @@
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* 拖拽落点指示：比同行列宫高亮更醒目（更粗的描边 + 选中底），且只挂在「可落点」格上
+   （给定格/已通关由 JS 判定不挂，避免误导）。特异性 (0,2,0) 压过 .is-peer (0,1,0)，
+   与 .is-selected (0,2,0) 同档，靠源码顺序（本规则在后）胜出。 */
+.game-sudoku-cell.is-drop-target {
+  background: var(--hl-selected);
+  box-shadow: inset 0 0 0 3px var(--accent-dark);
+}
+
 /* —— 数字格的关联高亮：调底，不刷底 ——
    上面三条平底只该作用于空格（笔记需要一块可见的底）。数字格若也被整格刷掉，
    「题面淡底 vs 玩家色块」这条身份通道就没了——同行/列/宫一多就分不清谁是谁。
@@ -676,6 +697,9 @@
   font-weight: 700;
   font-size: clamp(16px, 4vw, 22px);
   cursor: pointer;
+  /* 触屏上从按钮起手拖拽时，不让浏览器把手势当成滚动/缩放（touch-action 作用于起手元素，
+     整段拖拽都被锁定），否则指针 move 会被系统吃掉，拖拽在手机上失效。点按不受影响。 */
+  touch-action: none;
 }
 
 .game-sudoku-pad button:hover:not(:disabled) {
@@ -685,6 +709,39 @@
 .game-sudoku-pad button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* 拖拽态：起点按钮半透明；拖拽中棋盘显抓取光标；跟随指针的浮层数字。 */
+.game-sudoku-pad button.is-drag-source {
+  opacity: 0.5;
+}
+
+.game-sudoku.is-dragging .game-sudoku-board {
+  cursor: grabbing;
+}
+
+.game-sudoku-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2147483647;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  box-shadow: 0 6px 16px var(--ghost-shadow);
+  opacity: 0.92;
+  pointer-events: none; /* 关键：不能挡住 elementFromPoint 探测落点格 */
+  user-select: none;
 }
 
 .game-sudoku-overlay {
