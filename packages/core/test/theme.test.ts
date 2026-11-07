@@ -455,6 +455,51 @@ describe('给定数字 vs 玩家数字的可辨识度', () => {
   });
 });
 
+describe('候选每数字异色对比', () => {
+  // 候选色只在「普通格底(cell-bg)」与「同行列宫高亮底(peer)」上生效（选中格由
+  // .is-selected .cell-notes 统一覆盖成 --text-given）。这两块背景上必须过 4.5:1，
+  // 否则 7–11px 的小字笔记会读不清。复用与上面一致的 WCAG 相对亮度公式。
+  const chan = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = (hex: string): number => {
+    const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+    if (!m || !m[1]) throw new Error(`契约层出现非 #rrggbb 的颜色：${hex}`);
+    const n = m[1];
+    return 0.2126 * chan(parseInt(n.slice(0, 2), 16)) + 0.7152 * chan(parseInt(n.slice(2, 4), 16)) + 0.0722 * chan(parseInt(n.slice(4, 6), 16));
+  };
+  const contrast = (a: string, b: string): number => {
+    const [x, y] = [lum(a), lum(b)];
+    const [hi, lo] = x > y ? [x, y] : [y, x];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it('每个 --sudoku-note-N 压在 cell-bg / peer 底上都过 4.5:1', () => {
+    for (const p of PRESETS) {
+      const d = declMap(p.rule);
+      const cellBg = d.get('--sudoku-cell-bg');
+      const peer = d.get('--sudoku-hl-peer');
+      expect(cellBg, `${p.name} 缺 cell-bg`).toBeTruthy();
+      expect(peer, `${p.name} 缺 hl-peer`).toBeTruthy();
+      for (let n = 1; n <= 9; n++) {
+        const note = d.get(`--sudoku-note-${n}`);
+        expect(note, `${p.name} 预设缺 --sudoku-note-${n}`).toBeTruthy();
+        for (const [label, bg] of [
+          ['cell-bg', cellBg],
+          ['peer', peer]
+        ] as const) {
+          const r = contrast(note as string, bg as string);
+          expect(
+            r,
+            `${p.name} 候选色 ${n}(${note}) 压在 ${label}(${bg}) 只有 ${r.toFixed(2)}:1，读不清`
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+});
+
 describe('落子弹跳动画契约', () => {
   it('幅度与时段是可调 token，四档都给值且落在合理区间', () => {
     for (const p of PRESETS) {

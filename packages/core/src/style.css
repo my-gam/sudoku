@@ -102,6 +102,19 @@
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
   --sudoku-pop-scale: 1.12;
   --sudoku-pop-duration: 160ms;
+
+  /* 候选（铅笔笔记）每数字异色：9 个独立色相，压在 cell-bg / peer 底上都过 4.5:1。
+     选中格上的笔记仍由布局层 .is-selected .cell-notes 统一覆盖成 --text-given，
+     故这里不用兼顾选中底。色相按 40° 步进，浅色主题走暗色、深色主题走亮色。 */
+  --sudoku-note-1: #4f0d0d;
+  --sudoku-note-2: #4f390d;
+  --sudoku-note-3: #394f0d;
+  --sudoku-note-4: #0d4f0d;
+  --sudoku-note-5: #0d4f39;
+  --sudoku-note-6: #0d394f;
+  --sudoku-note-7: #0d0d4f;
+  --sudoku-note-8: #390d4f;
+  --sudoku-note-9: #4f0d39;
 }
 
 /* ---------- 深色 ---------- */
@@ -149,6 +162,17 @@
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
   --sudoku-pop-scale: 1.12;
   --sudoku-pop-duration: 160ms;
+
+  /* 候选每数字异色（深色主题走亮色相，其余约定同源浅色档）。 */
+  --sudoku-note-1: #f2b0b0;
+  --sudoku-note-2: #f2dcb0;
+  --sudoku-note-3: #dcf2b0;
+  --sudoku-note-4: #b0f2b0;
+  --sudoku-note-5: #b0f2dc;
+  --sudoku-note-6: #b0dcf2;
+  --sudoku-note-7: #b0b0f2;
+  --sudoku-note-8: #dcb0f2;
+  --sudoku-note-9: #f2b0dc;
 }
 
 /* ---------- 高对比：强光与低视力场景 ---------- */
@@ -197,6 +221,17 @@
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
   --sudoku-pop-scale: 1.12;
   --sudoku-pop-duration: 160ms;
+
+  /* 候选每数字异色（高对比主题走亮色相，与深色档同源）。 */
+  --sudoku-note-1: #f2b0b0;
+  --sudoku-note-2: #f2dcb0;
+  --sudoku-note-3: #dcf2b0;
+  --sudoku-note-4: #b0f2b0;
+  --sudoku-note-5: #b0f2dc;
+  --sudoku-note-6: #b0dcf2;
+  --sudoku-note-7: #b0b0f2;
+  --sudoku-note-8: #dcb0f2;
+  --sudoku-note-9: #f2b0dc;
 }
 
 /* ---------- 纸质暖色 ---------- */
@@ -243,6 +278,17 @@
   --sudoku-radius: clamp(4px, 1.2vw, 10px);
   --sudoku-pop-scale: 1.12;
   --sudoku-pop-duration: 160ms;
+
+  /* 候选每数字异色（纸质暖色主题走暗色相，与浅色档同源）。 */
+  --sudoku-note-1: #4f0d0d;
+  --sudoku-note-2: #4f390d;
+  --sudoku-note-3: #394f0d;
+  --sudoku-note-4: #0d4f0d;
+  --sudoku-note-5: #0d4f39;
+  --sudoku-note-6: #0d394f;
+  --sudoku-note-7: #0d0d4f;
+  --sudoku-note-8: #390d4f;
+  --sudoku-note-9: #4f0d39;
 }
 
 /* ==========================================================================
@@ -289,6 +335,17 @@
   --radius: var(--sudoku-radius);
   --pop-scale: var(--sudoku-pop-scale);
   --pop-duration: var(--sudoku-pop-duration);
+
+  /* 候选每数字异色：9 个独立色相 → 短名，布局层据此上色。 */
+  --note-1: var(--sudoku-note-1);
+  --note-2: var(--sudoku-note-2);
+  --note-3: var(--sudoku-note-3);
+  --note-4: var(--sudoku-note-4);
+  --note-5: var(--sudoku-note-5);
+  --note-6: var(--sudoku-note-6);
+  --note-7: var(--sudoku-note-7);
+  --note-8: var(--sudoku-note-8);
+  --note-9: var(--sudoku-note-9);
 }
 
 /* ==========================================================================
@@ -586,6 +643,20 @@
 .game-sudoku-cell.is-selected .cell-notes {
   color: var(--text-given);
 }
+
+/* 候选每数字异色：识别快、同数分组直观。
+   特异性 (0,2,1) 压过基础 .cell-notes（0,1,0）→ 普通格（含同行列宫高亮）走各自色相；
+   选中格由上面的 (0,3,0) 规则统一覆盖成正文色，保证那一块笔记可读性（见注释）。
+   数字本体已标注，色相只是辅助分组，所以两色即便色相接近也不影响辨识。 */
+.cell-notes span[data-digit='1'] { color: var(--note-1); }
+.cell-notes span[data-digit='2'] { color: var(--note-2); }
+.cell-notes span[data-digit='3'] { color: var(--note-3); }
+.cell-notes span[data-digit='4'] { color: var(--note-4); }
+.cell-notes span[data-digit='5'] { color: var(--note-5); }
+.cell-notes span[data-digit='6'] { color: var(--note-6); }
+.cell-notes span[data-digit='7'] { color: var(--note-7); }
+.cell-notes span[data-digit='8'] { color: var(--note-8); }
+.cell-notes span[data-digit='9'] { color: var(--note-9); }
 
 .game-sudoku-pad {
   display: grid;
