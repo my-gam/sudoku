@@ -1,23 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import '@my-games/sudoku-core/style.css';
-import { resolveTheme } from '@my-games/sudoku-core';
-import { useGame } from './useGame';
-import type { Digit, Difficulty, SaveStorage, SudokuTheme } from '@my-games/sudoku-core';
+import { mount, type Digit, type Difficulty, type SaveStorage, type SudokuTheme } from '@my-games/sudoku-core';
+import type { GameSudokuInstance } from './instance';
 
 /**
- * GameSudoku —— Vue 3 官方组件，桥接 @my-games/sudoku-core 引擎。
+ * GameSudoku —— Vue 3 官方组件，桥接 @my-games/sudoku-core。
  *
- * 输入模型：
- * - 点击格子选中；数字面板 / 键盘 1-9 填数；N 切笔记模式；Backspace/Delete 擦除；方向键移动选中。
- * - 键盘走 window keydown，但严格判 `document.activeElement === boardEl`，多实例并存只活动那个响应。
- * - 视觉/类名全部复用 core 的 style.css，与 React 版行为对齐。
- * - 主题：档位的**归属在引擎**（`Sudoku.setTheme` / `GameState.theme`，落在独立的
- *   `game-sudoku:theme` 键）。本组件只做两件事：把 `theme` prop 写进引擎，以及把引擎
- *   推来的 `state.theme` 渲染成根元素 `data-theme`。core 的 CSS 只承载 4 个具体预设，
- *   `auto` 在这里用 matchMedia 解析成 light / dark 后写入，并监听系统偏好变化实时切换。
+ * 重构后：本组件**不再手写任何 DOM**——棋盘 / 工具栏 / 数字键盘 / 通关浮层全部由 core 的
+ * `mount()` 渲染并接管交互（键盘、主题、计时、落子弹跳都在 core 里）。本组件只负责：
+ * - 把 props 透传给 `mount`（难度 / 存储 / 标题 / 是否显示键盘与提示 / 初始主题…）；
+ * - 把 `mount` 的 `onDigit` / `onSolved` 转成 Vue 的 `input` / `solved` 事件；
+ * - 受控 `theme` / `autoNotes` 变化时推回引擎（换主题不该重建棋盘、丢 undo 历史）；
+ * - 通过 `defineExpose` 暴露命令式句柄（委托给 controller）。
+ *
+ * 视觉 / 类名 / 无障碍全部复用 core 的 style.css，与 React / vanilla / IIFE 完全一致。
  */
-
 interface Props {
   difficulty?: Difficulty;
   storage?: SaveStorage | null;
@@ -53,376 +51,66 @@ const emit = defineEmits<{
   (e: 'solved', payload: { difficulty: Difficulty; seconds: number }): void;
 }>();
 
-const { state, raw, select, input, erase, toggleNote, hint, newGame, undo } = useGame({
-  difficulty: props.difficulty,
-  storage: props.storage,
-  saveKey: props.saveKey,
-  bestKey: props.bestKey,
-  freshStart: props.freshStart,
-  theme: props.theme,
-  autoNotes: props.autoNotes
+const host = ref<HTMLDivElement | null>(null);
+const controller = shallowRef<ReturnType<typeof mount> | null>(null);
+
+onMounted(() => {
+  const el = host.value;
+  if (!el) return;
+  controller.value = mount(el, {
+    difficulty: props.difficulty,
+    storage: props.storage,
+    saveKey: props.saveKey,
+    bestKey: props.bestKey,
+    freshStart: props.freshStart,
+    title: props.title,
+    showPad: props.showPad,
+    showHint: props.showHint,
+    autofocus: props.autofocus,
+    // 样式由本包自行 import 的 @my-games/sudoku-core/style.css 提供，关掉 core 的自动注入避免重复。
+    injectStyle: false,
+    subtitle: '@my-games/sudoku-vue',
+    theme: props.theme,
+    autoNotes: props.autoNotes,
+    onDigit: (e) => emit('input', e),
+    onSolved: (e) => emit('solved', e)
+  });
 });
 
-const boardEl = ref<HTMLDivElement | null>(null);
-const noteMode = ref(false);
-// 系统深浅偏好。只有 theme='auto' 会消费它，但监听从挂载就一直开着——用户中途翻
-// 系统深色时不需要重挂组件就能换档。
-const prefersDark = ref(false);
-let schemeQuery: MediaQueryList | null = null;
-function onSchemeChange(ev: MediaQueryListEvent): void {
-  prefersDark.value = ev.matches;
-}
-/**
- * 写进根元素 data-theme 的最终档位。
- * 读的是**引擎状态**而不是 prop —— 否则宿主通过 ref.setTheme() 改主题时 UI 不跟着走，
- * 就成了「prop 一个值、引擎一个值」的双真相。
- */
-const resolvedTheme = computed(() => resolveTheme(state.value.theme, prefersDark.value));
-// 用时每秒刷新：core 只在操作时推快照，这里用 tick 触发对 raw.getState() 的实时重读。
-const tick = ref(0);
-let timerId: number | undefined;
-function startTimer(): void {
-  if (timerId !== undefined || typeof window === 'undefined') return;
-  timerId = window.setInterval(() => {
-    if (state.value.status === 'playing') tick.value++;
-  }, 1000);
-}
-function stopTimer(): void {
-  if (timerId !== undefined) {
-    window.clearInterval(timerId);
-    timerId = undefined;
-  }
-}
-
-const DIFFS: Array<{ key: Difficulty; label: string }> = [
-  { key: 'easy', label: '简单' },
-  { key: 'medium', label: '中等' },
-  { key: 'hard', label: '困难' }
-];
-const PAD_DIGITS: Digit[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-/** 9 宫，每宫 9 格（映射到全局 row/col）。 */
-const boxes = computed(() => {
-  const out: Array<{ key: number; cells: Array<{ row: number; col: number }> }> = [];
-  for (let bi = 0; bi < 9; bi++) {
-    const cells: Array<{ row: number; col: number }> = [];
-    for (let ci = 0; ci < 9; ci++) {
-      cells.push({
-        row: Math.floor(bi / 3) * 3 + Math.floor(ci / 3),
-        col: (bi % 3) * 3 + (ci % 3)
-      });
-    }
-    out.push({ key: bi, cells });
-  }
-  return out;
+onBeforeUnmount(() => {
+  controller.value?.destroy();
+  controller.value = null;
 });
 
-function cellValue(row: number, col: number): number {
-  return state.value.grid[row]?.[col] ?? 0;
-}
-
-function cellNotes(row: number, col: number): Digit[] {
-  return cellValue(row, col) === 0 ? (state.value.notes[row]?.[col] ?? []) : [];
-}
-
-/**
- * 数字层的 key：落在同一格上的第二次落子 seq 会变，Vue 便会重建该 span，
- * CSS 动画随之重播（类名不变时动画不会自己重来）。
- */
-function popKey(row: number, col: number): string {
-  const pop = state.value.lastPop;
-  return pop && pop.row === row && pop.col === col ? `pop-${pop.seq}` : 'value';
-}
-
-function cellClass(row: number, col: number): Record<string, boolean> {
-  const s = state.value;
-  const v = cellValue(row, col);
-  const given = s.givenMask[row]?.[col] ?? false;
-  const sel = s.selected;
-  const cls: Record<string, boolean> = {
-    'game-sudoku-cell': true,
-    'is-given': given,
-    'is-user': !given && v !== 0,
-    'is-conflict': !!s.conflicts[row]?.[col],
-    'is-selected': !!sel && sel.row === row && sel.col === col,
-    'is-pop': !!s.lastPop && s.lastPop.row === row && s.lastPop.col === col,
-    'is-peer': false,
-    'is-same': false
-  };
-  if (sel && !(sel.row === row && sel.col === col)) {
-    const sameBox =
-      Math.floor(sel.row / 3) === Math.floor(row / 3) &&
-      Math.floor(sel.col / 3) === Math.floor(col / 3);
-    if (sel.row === row || sel.col === col || sameBox) cls['is-peer'] = true;
-    const selVal = cellValue(sel.row, sel.col);
-    if (v !== 0 && v === selVal) cls['is-same'] = true;
-  }
-  return cls;
-}
-
-function applyDigit(d: Digit): void {
-  const sel = state.value.selected;
-  const changed = noteMode.value ? toggleNote(d) : input(d);
-  if (!noteMode.value) emit('input', { digit: d, changed, row: sel?.row ?? -1, col: sel?.col ?? -1 });
-}
-
-function onPad(d: Digit): void {
-  applyDigit(d);
-}
-
-function formatTime(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-const overlayVisible = computed(() => state.value.status === 'won');
-const timeText = computed(() => {
-  void tick.value; // 依赖 tick，每秒重读实时用时
-  return formatTime(raw.getState().elapsedSeconds);
-});
-const bestText = computed(() =>
-  state.value.bestSeconds === null ? '—' : formatTime(state.value.bestSeconds)
-);
-
-// --- 键盘 ---
-function onKey(ev: KeyboardEvent): void {
-  if (typeof document !== 'undefined' && document.activeElement !== boardEl.value) return;
-  if (/^[1-9]$/.test(ev.key)) {
-    applyDigit(Number(ev.key) as Digit);
-    ev.preventDefault();
-    return;
-  }
-  if (ev.key === 'Backspace' || ev.key === 'Delete') {
-    erase();
-    ev.preventDefault();
-    return;
-  }
-  if (ev.key === 'n' || ev.key === 'N') {
-    noteMode.value = !noteMode.value;
-    return;
-  }
-  const sel = state.value.selected;
-  if (!sel) return;
-  let { row, col } = sel;
-  switch (ev.key) {
-    case 'ArrowUp':
-      row = (row + 8) % 9;
-      break;
-    case 'ArrowDown':
-      row = (row + 1) % 9;
-      break;
-    case 'ArrowLeft':
-      col = (col + 8) % 9;
-      break;
-    case 'ArrowRight':
-      col = (col + 1) % 9;
-      break;
-    default:
-      return;
-  }
-  ev.preventDefault();
-  select(row, col);
-}
-
-// 受控用法：宿主改了 theme prop 就写回引擎（undefined 表示交还引擎自己决定，不覆盖）。
+// 受控用法：宿主改了 theme / autoNotes 就写回引擎（undefined 表示交还引擎自己决定，不覆盖）。
 watch(
   () => props.theme,
   (next) => {
-    if (next !== undefined) raw.setTheme(next);
+    if (next !== undefined) controller.value?.setTheme(next);
   }
 );
-// 自动候选同理。注意按钮读的是 state.autoNotes（引擎真相），不是本地 ref ——
-// 否则宿主走 ref.setAutoNotes() 时按钮状态会与实际脱节。
 watch(
   () => props.autoNotes,
   (next) => {
-    if (next !== undefined) raw.setAutoNotes(next);
+    if (next !== undefined) controller.value?.setAutoNotes(next);
   }
 );
 
-let lastStatus = state.value.status;
-watch(
-  () => state.value.status,
-  (st) => {
-    if (st === 'won') {
-      stopTimer();
-      if (lastStatus !== 'won') {
-        emit('solved', { difficulty: state.value.difficulty, seconds: raw.getState().elapsedSeconds });
-      }
-    } else {
-      startTimer(); // playing（含 newGame 重开）
-    }
-    lastStatus = st;
-  }
-);
-
-onMounted(() => {
-  if (props.autofocus) boardEl.value?.focus({ preventScroll: true });
-  window.addEventListener('keydown', onKey, { passive: false });
-  if (typeof window.matchMedia === 'function') {
-    schemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    prefersDark.value = schemeQuery.matches;
-    schemeQuery.addEventListener('change', onSchemeChange);
-  }
-  startTimer();
-});
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKey);
-  schemeQuery?.removeEventListener('change', onSchemeChange);
-  schemeQuery = null;
-  stopTimer();
-});
-
-defineExpose({
-  select,
-  input,
-  erase,
-  toggleNote,
-  hint,
-  newGame,
-  undo,
-  // 主题走引擎；这里包一层是为了保住 this（直接写 raw.setTheme 交出的是脱离实例的引用）。
-  setTheme: (next: SudokuTheme): boolean => raw.setTheme(next),
-  getTheme: (): SudokuTheme => raw.getTheme(),
-  setAutoNotes: (next: boolean): boolean => raw.setAutoNotes(next),
-  getAutoNotes: (): boolean => raw.getAutoNotes()
+defineExpose<GameSudokuInstance>({
+  select: (row, col) => controller.value?.select(row, col),
+  input: (digit) => controller.value?.input(digit) ?? false,
+  erase: () => controller.value?.erase() ?? false,
+  toggleNote: (digit) => controller.value?.toggleNote(digit) ?? false,
+  hint: () => controller.value?.hint() ?? false,
+  newGame: (difficulty) => controller.value?.newGame(difficulty),
+  undo: () => controller.value?.undo() ?? false,
+  setTheme: (next) => controller.value?.setTheme(next) ?? false,
+  getTheme: () => controller.value?.getTheme() ?? 'light',
+  setAutoNotes: (next) => controller.value?.setAutoNotes(next) ?? false,
+  getAutoNotes: () => controller.value?.getAutoNotes() ?? false
 });
 </script>
 
 <template>
-  <div class="game-sudoku" :data-theme="resolvedTheme">
-    <header class="game-sudoku-header">
-      <h1 class="game-sudoku-title">
-        {{ title }}
-        <span class="subtitle">@my-games/sudoku-vue</span>
-      </h1>
-      <div class="game-sudoku-stats">
-        <div class="game-sudoku-stat">
-          <span class="label">用时</span>
-          <span class="value">{{ timeText }}</span>
-        </div>
-        <div class="game-sudoku-stat">
-          <span class="label">最佳</span>
-          <span class="value">{{ bestText }}</span>
-        </div>
-        <div class="game-sudoku-stat" :class="{ 'is-danger': state.mistakeCount > 0 }">
-          <span class="label">错误</span>
-          <span class="value">{{ state.mistakeCount }}</span>
-        </div>
-      </div>
-    </header>
-
-    <div class="game-sudoku-toolbar">
-      <div class="game-sudoku-difficulty" role="group" aria-label="难度">
-        <button
-          v-for="d in DIFFS"
-          :key="d.key"
-          class="game-sudoku-chip"
-          :class="{ 'is-active': state.difficulty === d.key }"
-          type="button"
-          @click="newGame(d.key)"
-        >
-          {{ d.label }}
-        </button>
-      </div>
-      <div class="game-sudoku-actions">
-        <button
-          class="game-sudoku-button"
-          :class="{ 'is-toggled': noteMode }"
-          type="button"
-          :disabled="state.status === 'won'"
-          @click="noteMode = !noteMode"
-        >
-          笔记 {{ noteMode ? '开' : '关' }}
-        </button>
-        <button
-          class="game-sudoku-button"
-          :class="{ 'is-toggled': state.autoNotes }"
-          type="button"
-          :aria-pressed="state.autoNotes"
-          :disabled="state.status === 'won'"
-          title="自动按盘面填候选数（与手写笔记同一通道，会被下一次重算覆盖）"
-          @click="raw.setAutoNotes(!state.autoNotes)"
-        >
-          候选 {{ state.autoNotes ? '开' : '关' }}
-        </button>
-        <button
-          class="game-sudoku-button"
-          type="button"
-          :disabled="state.status === 'won' || state.historySize === 0"
-          @click="undo()"
-        >
-          撤销
-        </button>
-        <button
-          v-if="showHint"
-          class="game-sudoku-button"
-          type="button"
-          :disabled="state.status === 'won'"
-          @click="hint()"
-        >
-          提示
-        </button>
-        <button class="game-sudoku-button is-primary" type="button" @click="newGame()">
-          新游戏
-        </button>
-      </div>
-    </div>
-
-    <div
-      ref="boardEl"
-      class="game-sudoku-board"
-      tabindex="0"
-      role="application"
-      :aria-label="`数独棋盘 ${state.status}`"
-    >
-      <div v-for="box in boxes" :key="box.key" class="game-sudoku-box">
-        <div
-          v-for="cell in box.cells"
-          :key="`${cell.row}-${cell.col}`"
-          :class="cellClass(cell.row, cell.col)"
-          :data-row="cell.row"
-          :data-col="cell.col"
-          @click="select(cell.row, cell.col)"
-        >
-          <span
-            v-if="cellValue(cell.row, cell.col) !== 0"
-            class="cell-value"
-            :key="popKey(cell.row, cell.col)"
-          >{{ cellValue(cell.row, cell.col) }}</span>
-          <div v-else class="cell-notes">
-            <span v-for="d in PAD_DIGITS" :key="d">{{
-              cellNotes(cell.row, cell.col).includes(d) ? d : ''
-            }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="game-sudoku-overlay" :class="{ 'is-visible': overlayVisible }">
-        <h2>解开了！</h2>
-        <p class="meta">
-          难度 {{ state.difficulty }} · 用时 {{ timeText }} · 提示 {{ state.hintCount }} 次 · 错误
-          {{ state.mistakeCount }} 次
-        </p>
-        <div class="row">
-          <button class="game-sudoku-button is-primary" type="button" @click="newGame()">
-            再来一局
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showPad" class="game-sudoku-pad" role="group" aria-label="数字键盘">
-      <button
-        v-for="d in PAD_DIGITS"
-        :key="d"
-        type="button"
-        :disabled="state.status === 'won'"
-        @click="onPad(d)"
-      >
-        {{ d }}
-      </button>
-    </div>
-  </div>
+  <div ref="host" class="game-sudoku-host" />
 </template>

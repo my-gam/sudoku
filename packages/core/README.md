@@ -30,6 +30,44 @@ game.undo();
 unsub();
 ```
 
+## 一键挂载（mount / IIFE）
+
+不想自己写 DOM？`mount()` 把完整 UI（棋盘 / 工具栏 / 数字键盘 / 通关浮层）渲染进任意容器，
+并接管键盘、主题 `auto` 跟随系统、1s 计时心跳、落子弹跳动画。Vue / React 适配器正是薄壳封装它，
+所以三种消费方式视觉与行为完全一致。
+
+```ts
+import { mount } from '@my-games/sudoku-core';
+import '@my-games/sudoku-core/style.css'; // IIFE/原生场景也可省略：mount 默认自动注入样式
+
+// 任意容器 + 配置即可，零手写 DOM
+const ctrl = mount(document.getElementById('app')!, {
+  difficulty: 'easy',
+  onDigit: (e) => console.log(`${e.row},${e.col} ← ${e.digit}`),
+  onSolved: (e) => console.log('通关', e.seconds)
+});
+
+// 命令式句柄：ctrl.select / input / erase / hint / undo / newGame / setTheme / ...
+// 卸载：ctrl.destroy()（解绑事件、清定时器、从容器移除根节点，可重复调用）
+```
+
+IIFE（`<script>` 直引）同理，全局名是 `SudokuCore`：
+
+```html
+<link rel="stylesheet" href=".../sudoku-core/style.css" />
+<!-- 或省掉上面这行：mount 默认会把样式注入一次 <head> -->
+<div id="app"></div>
+<script src=".../sudoku-core/index.iife.js"></script>
+<script>
+  SudokuCore.mount(document.getElementById('app'), { difficulty: 'hard' });
+</script>
+```
+
+`mount(target, options)` 的 `options` = 引擎 `GameOptions`（难度 / 存储 / 主题 / 自动候选 …）
+叠加若干 UI 选项：`title` / `subtitle`（传 `false` 隐藏）/ `showPad` / `showHint` / `autofocus` /
+`onDigit` / `onSolved` / `injectStyle`（默认 `true`，自动注入样式；若你已自行 `import` 过样式可设 `false`）。
+返回 `SudokuController`：`game` / `root` / `destroy()` 及全部引擎命令式方法。
+
 ## 引擎 API
 
 - `new Sudoku(options?)` — 全可注入：`difficulty` / `rng` / `clock` / `storage` / `saveKey` /
@@ -54,7 +92,8 @@ unsub();
   `emptyBestTimes` / `tryGetGlobalStorage` + 键常量。
 - 主题：`SUDOKU_THEMES` / `SUDOKU_DATA_THEMES` / `DEFAULT_THEME` / `isTheme` / `normalizeTheme` /
   `resolveTheme(theme, prefersDark)` + 类型 `SudokuTheme` / `SudokuDataTheme`。
-  本包零 DOM，只提供档位真相与纯解析函数；写 `data-theme` 的是宿主或适配层组件。
+  本包提供引擎与可选的 `mount()` 渲染器：`mount()` 仅在浏览器调用时碰 DOM（Node/SSR 下 import 安全，调用才抛），
+  档位真相与纯解析函数依旧零 DOM；写 `data-theme` 的是 `mount` 或适配层组件。
 
 ## 主题与样式契约
 

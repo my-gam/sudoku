@@ -12,6 +12,9 @@
 export { Sudoku } from './game';
 export type { GameOptions } from './game';
 
+export { mount } from './mount';
+export type { MountOptions, SudokuController } from './mount';
+
 export { solve, countSolutions } from './solver';
 
 export { generatePuzzle, generateFullGrid, TARGET_CLUES } from './generator';
